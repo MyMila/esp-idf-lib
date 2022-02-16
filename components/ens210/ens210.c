@@ -15,7 +15,7 @@
 
 // Chip constants
 #define ENS210_PARTID       0x0210 // The expected part id of the ENS210
-#define ENS210_BOOTING_MS   5 // Booting time in ms (also after reset, or going to high power)
+#define ENS210_BOOTING_MS   2 // Booting time in ms (also after reset, or going to high power)
 #define ENS210_THCONV_SINGLE_MS 130 // Conversion time in ms for single shot T/H measurement
 #define ENS210_THCONV_CONT_MS   238 // Conversion time in ms for continuous T/H measurement
 #define ENS210_SOLDERING_CORRECTION (50 * 64 / 1000)
