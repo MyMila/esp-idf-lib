@@ -171,17 +171,7 @@ esp_err_t ens160_flash_firmware(i2c_dev_t *dev, const uint8_t *app_img, int size
  * @return - ESP_OK - success
  *         - ESP_FAIL - fail
  */
-esp_err_t ens160_set_env_data(i2c_dev_t *dev, float temperature, float humidity);
-
-/**
- * @brief Get hot-plait's resistance and baseline
- * @param dev I2C device descriptor
- * @param resistance Pointer to where resistance data should be stored
- * @param humidity Pointer to where baseline data should be stored
- * @return - ESP_OK - success
- *         - ESP_FAIL - fail
- */
-esp_err_t ens160_internal_values(i2c_dev_t *dev, uint32_t (*resistance)[4], uint32_t (*baseline)[4]);
+esp_err_t ens160_set_environmental_data(i2c_dev_t *dev, float temperature, float humidity);
 
 /**
  * @brief Get TVOC, eCO2, AQI and NO2 readings
@@ -193,7 +183,8 @@ esp_err_t ens160_internal_values(i2c_dev_t *dev, uint32_t (*resistance)[4], uint
  * @return
  */
 esp_err_t
-ens160_measure(i2c_dev_t *dev, bool wait_for_new, ens160_aqi_t *aqi, uint16_t *tvoc, uint16_t *eco2);
+ens160_measure(i2c_dev_t *dev, bool wait_for_new, ens160_aqi_t *aqi, uint16_t *tvoc, uint16_t *eco2,
+               uint32_t (*resistance)[4], uint32_t (*baseline)[4]);
 
 #ifdef    __cplusplus
 }

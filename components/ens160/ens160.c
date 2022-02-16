@@ -226,6 +226,7 @@ esp_err_t ens160_part_id(i2c_dev_t *dev, uint16_t *part_id)
 // Writes temperature and humidity in ENS210 format
 static esp_err_t ens160_set_env_data_ens210(i2c_dev_t *dev, uint16_t temperature, uint16_t humidity)
 {
+    CHECK_ARG(dev);
     //uint16_t temp;
     uint8_t trh_in[4];
 
@@ -244,11 +245,11 @@ static esp_err_t ens160_set_env_data_ens210(i2c_dev_t *dev, uint16_t temperature
     return ESP_OK;
 }
 
-esp_err_t ens160_set_env_data(i2c_dev_t *dev, float temperature, float humidity)
+esp_err_t ens160_set_environmental_data(i2c_dev_t *dev, float temperature, float humidity)
 {
+    CHECK_ARG(dev);
 
     uint16_t t_data = (uint16_t) ((temperature + 273.15f) * 64.0f);
-
     uint16_t rh_data = (uint16_t) (humidity * 512.0f);
 
     return ens160_set_env_data_ens210(dev, t_data, rh_data);
@@ -256,10 +257,13 @@ esp_err_t ens160_set_env_data(i2c_dev_t *dev, float temperature, float humidity)
 
 // Perform measurement and stores result in internal variables
 esp_err_t
-ens160_measure(i2c_dev_t *dev, bool wait_for_new, ens160_aqi_t *aqi, uint16_t *tvoc, uint16_t *eco2)
+ens160_measure(i2c_dev_t *dev, bool wait_for_new, ens160_aqi_t *aqi, uint16_t *tvoc, uint16_t *eco2,
+               uint32_t (*resistance)[4], uint32_t (*baseline)[4])
 {
+    CHECK_ARG(dev);
+
     uint8_t status;
-    uint8_t buffer[5];
+    uint8_t buffer[8];
 
     if (wait_for_new) {
         do {
@@ -280,41 +284,28 @@ ens160_measure(i2c_dev_t *dev, bool wait_for_new, ens160_aqi_t *aqi, uint16_t *t
     if (IS_NEWDAT(status)) {
         I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS160_REG_DATA_AQI, &buffer, 5));
 
-        *aqi = buffer[0];
-        *tvoc = buffer[1] | ((uint16_t) buffer[2] << 8);
-        *eco2 = buffer[3] | ((uint16_t) buffer[4] << 8);
+        if (aqi) *aqi = buffer[0];
+        if (tvoc) *tvoc = buffer[1] | ((uint16_t) buffer[2] << 8);
+        if (eco2) *eco2 = buffer[3] | ((uint16_t) buffer[4] << 8);
     }
 
-    I2C_DEV_GIVE_MUTEX(dev);
-    return ESP_OK;
-}
-
-esp_err_t ens160_internal_values(i2c_dev_t *dev, uint32_t (*resistance)[4], uint32_t (*baseline)[4])
-{
-    uint8_t status;
-    uint8_t buffer[8];
-
-    I2C_DEV_TAKE_MUTEX(dev);
-
-    I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS160_REG_DATA_STATUS, &status, 1));
     // Read raw resistance values
-    if (IS_NEWGPR(status)) {
+    if (IS_NEWGPR(status) && resistance != NULL) {
         I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS160_REG_GPR_READ_0, buffer, 8));
         for (uint8_t i = 0; i < 4; i++) {
-            *resistance[i] = CONVERT_RS_RAW2OHMS_F((uint32_t) (buffer[i * 2] | ((uint16_t) buffer[i * 2 + 1] << 8)));
+            (*resistance)[i] = CONVERT_RS_RAW2OHMS_F((uint32_t) (buffer[i * 2] | ((uint16_t) buffer[i * 2 + 1] << 8)));
         }
     }
 
     // Read baselines
-    if ((IS_NEWGPR(status)) || (IS_NEWDAT(status))) {
+    if ((IS_NEWGPR(status) || IS_NEWDAT(status)) && baseline != NULL) {
         I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS160_REG_DATA_BL, buffer, 8));
         for (uint8_t i = 0; i < 4; i++) {
-            *baseline[i] = CONVERT_RS_RAW2OHMS_F((uint32_t) (buffer[i * 2] | ((uint16_t) buffer[i * 2 + 1] << 8)));
+            (*baseline)[i] = CONVERT_RS_RAW2OHMS_F((uint32_t) (buffer[i * 2] | ((uint16_t) buffer[i * 2 + 1] << 8)));
         }
     }
 
     I2C_DEV_GIVE_MUTEX(dev);
-
     return ESP_OK;
 }
 
