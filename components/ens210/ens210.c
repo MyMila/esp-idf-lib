@@ -15,7 +15,7 @@
 
 // Chip constants
 #define ENS210_PARTID       0x0210 // The expected part id of the ENS210
-#define ENS210_BOOTING_MS   2 // Booting time in ms (also after reset, or going to high power)
+#define ENS210_BOOTING_MS   10 // Booting time in ms (also after reset, or going to high power)
 #define ENS210_THCONV_SINGLE_MS 130 // Conversion time in ms for single shot T/H measurement
 #define ENS210_THCONV_CONT_MS   238 // Conversion time in ms for continuous T/H measurement
 #define ENS210_SOLDERING_CORRECTION (50 * 64 / 1000)
@@ -44,9 +44,11 @@ struct {
         .available = false,
 };
 
+static const char* TAG = "ENS210";
+
 esp_err_t static ens210_low_power(i2c_dev_t *dev, bool enable)
 {
-    uint8_t data[1] = { enable ? 0x01 : 0x00 };
+    uint8_t data = enable ? 0x01 : 0x00;
 
     I2C_DEV_TAKE_MUTEX(dev);
     I2C_DEV_CHECK(dev, i2c_dev_write_reg(dev, ENS210_REG_SYS_CTRL, &data, 1));
@@ -84,7 +86,7 @@ esp_err_t ens210_init_desc(i2c_dev_t *dev, i2c_port_t port, gpio_num_t sda_gpio,
     }
 
     // Wait 10ms for the ENS210 to boot
-    vTaskDelay(pdMS_TO_TICKS(10));
+    vTaskDelay(pdMS_TO_TICKS(100));
 
     err = ens210_version(dev, &part_id, &uid);
     if (err != ESP_OK) {
@@ -122,11 +124,11 @@ esp_err_t ens210_version(i2c_dev_t *dev, uint16_t *part_id, uint64_t *uid)
     I2C_DEV_TAKE_MUTEX(dev);
 
     uint8_t data[8];
-    I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS210_REG_PART_ID, &data, 2));
+    I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS210_REG_PART_ID, data, 2));
 
     *part_id = data[1] * 256U + data[0] * 1U;
 
-    I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS210_REG_PART_ID, &data, 8));
+    I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS210_REG_UID, data, 8));
 
     for (uint8_t i = 0; i < 8; i++) {
         ((uint8_t *) uid)[i] = data[i];
@@ -141,7 +143,7 @@ esp_err_t ens210_version(i2c_dev_t *dev, uint16_t *part_id, uint64_t *uid)
 
 esp_err_t ens210_single_measurement_mode(i2c_dev_t *dev, bool enable)
 {
-    uint8_t data[1] = { enable ? 0x00 : 0x03 };
+    uint8_t data = enable ? 0x00 : 0x03;
 
     I2C_DEV_TAKE_MUTEX(dev);
     I2C_DEV_CHECK(dev, i2c_dev_write_reg(dev, ENS210_REG_SENS_RUN, &data, 1));
@@ -168,7 +170,7 @@ static esp_err_t read(i2c_dev_t *dev, uint32_t *t_data, uint32_t *h_data)
     uint8_t data[6];
 
     I2C_DEV_TAKE_MUTEX(dev);
-    I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS210_REG_T_VAL, &data, 6));
+    I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS210_REG_T_VAL, data, 6));
     I2C_DEV_GIVE_MUTEX(dev);
 
     // Retrieve and pack bytes into t_val and h_val
@@ -216,7 +218,7 @@ esp_err_t ens210_measure(i2c_dev_t *dev, float *temperature, float *humidity)
         }
     }
 
-    uint8_t data[1] = { 0x03 };
+    uint8_t data = 0x03;
     I2C_DEV_TAKE_MUTEX(dev);
     I2C_DEV_CHECK(dev, i2c_dev_write_reg(dev, ENS210_REG_SENS_START, &data, 1));
     I2C_DEV_GIVE_MUTEX(dev);
