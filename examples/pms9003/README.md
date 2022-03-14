@@ -50,15 +50,92 @@ I (300) spi_flash: flash io: dio
 W (303) spi_flash: Detected size(8192k) larger than the size in the binary image header(2048k). Using the size in the binary image header.
 I (318) cpu_start: Starting scheduler on PRO CPU.
 I (0) cpu_start: Starting scheduler on APP CPU.
-I (14582) PMS9003: PM1.0: 8
-I (14582) PMS9003: PM2.5: 11
-I (14582) PMS9003: PM10: 13
-I (15402) PMS9003: PM1.0: 9
-I (15402) PMS9003: PM2.5: 12
-I (15402) PMS9003: PM10: 13
-I (17222) PMS9003: PM1.0: 10
-I (17222) PMS9003: PM2.5: 14
-I (17222) PMS9003: PM10: 15
+I (00:00:03.135) PMS9003: PM1.0: 13
+I (00:00:03.135) PMS9003: PM2.5: 19
+I (00:00:03.136) PMS9003: PM10: 19
+I (00:00:03.137) PMS9003: Time difference betweeen measures: 0 ms
+E (00:00:03.560) PMS9003: pms9003_unpack: pms error code: 0x08
+E (00:00:03.561) PMS9003: pms9003_read_measurement: error: ESP_FAIL
+I (00:00:04.554) PMS9003: PM1.0: 13
+I (00:00:04.555) PMS9003: PM2.5: 19
+I (00:00:04.555) PMS9003: PM10: 19
+I (00:00:04.556) PMS9003: Time difference betweeen measures: 1410 ms
+E (00:00:04.563) PMS9003: pms9003_unpack: pms error code: 0x08
+E (00:00:04.569) PMS9003: pms9003_read_measurement: error: ESP_FAIL
+I (00:00:05.574) PMS9003: PM1.0: 13
+I (00:00:05.575) PMS9003: PM2.5: 19
+I (00:00:05.575) PMS9003: PM10: 19
+I (00:00:05.576) PMS9003: Time difference betweeen measures: 1011 ms
+E (00:00:05.583) PMS9003: pms9003_unpack: pms error code: 0x08
+E (00:00:05.589) PMS9003: pms9003_read_measurement: error: ESP_FAIL
+I (00:00:06.594) PMS9003: PM1.0: 13
+I (00:00:06.595) PMS9003: PM2.5: 19
+I (00:00:06.595) PMS9003: PM10: 19
+I (00:00:06.596) PMS9003: Time difference betweeen measures: 1011 ms
+E (00:00:06.603) PMS9003: pms9003_unpack: pms error code: 0x08
+E (00:00:06.609) PMS9003: pms9003_read_measurement: error: ESP_FAIL
+I (00:00:07.614) PMS9003: PM1.0: 13
+I (00:00:07.615) PMS9003: PM2.5: 19
+I (00:00:07.615) PMS9003: PM10: 19
+I (00:00:07.616) PMS9003: Time difference betweeen measures: 1011 ms
+E (00:00:07.623) PMS9003: pms9003_unpack: pms error code: 0x08
+E (00:00:07.629) PMS9003: pms9003_read_measurement: error: ESP_FAIL
+I (00:00:08.634) PMS9003: PM1.0: 13
+I (00:00:08.635) PMS9003: PM2.5: 19
+I (00:00:08.635) PMS9003: PM10: 19
+I (00:00:08.636) PMS9003: Time difference betweeen measures: 1011 ms
+E (00:00:08.643) PMS9003: pms9003_unpack: pms error code: 0x08
+E (00:00:08.649) PMS9003: pms9003_read_measurement: error: ESP_FAIL
+I (00:00:09.654) PMS9003: PM1.0: 13
+I (00:00:09.655) PMS9003: PM2.5: 19
+I (00:00:09.655) PMS9003: PM10: 19
+I (00:00:09.656) PMS9003: Time difference betweeen measures: 1011 ms
+E (00:00:09.663) PMS9003: pms9003_unpack: pms error code: 0x08
+E (00:00:09.669) PMS9003: pms9003_read_measurement: error: ESP_FAIL
+I (00:00:10.674) PMS9003: PM1.0: 13
+I (00:00:10.675) PMS9003: PM2.5: 19
+I (00:00:10.675) PMS9003: PM10: 19
+I (00:00:10.676) PMS9003: Time difference betweeen measures: 1011 ms
+I (00:00:10.683) PMS9003: PM1.0: 23
+I (00:00:10.687) PMS9003: PM2.5: 32
+I (00:00:10.691) PMS9003: PM10: 34
+I (00:00:10.695) PMS9003: Time difference betweeen measures: 0 ms
+I (00:00:10.847) PMS9003: PM1.0: 26
+I (00:00:10.847) PMS9003: PM2.5: 37
+I (00:00:10.847) PMS9003: PM10: 38
+I (00:00:10.848) PMS9003: Time difference betweeen measures: 144 ms
+I (00:00:11.758) PMS9003: PM1.0: 28
+I (00:00:11.758) PMS9003: PM2.5: 39
+I (00:00:11.758) PMS9003: PM10: 40
+I (00:00:11.759) PMS9003: Time difference betweeen measures: 902 ms
+I (00:00:12.669) PMS9003: PM1.0: 28
+I (00:00:12.669) PMS9003: PM2.5: 39
+I (00:00:12.670) PMS9003: PM10: 40
+I (00:00:12.671) PMS9003: Time difference betweeen measures: 903 ms
+I (00:00:13.580) PMS9003: PM1.0: 26
+I (00:00:13.580) PMS9003: PM2.5: 37
+I (00:00:13.580) PMS9003: PM10: 38
+I (00:00:13.581) PMS9003: Time difference betweeen measures: 902 ms
+I (00:00:14.491) PMS9003: PM1.0: 26
+I (00:00:14.491) PMS9003: PM2.5: 36
+I (00:00:14.491) PMS9003: PM10: 38
+I (00:00:14.492) PMS9003: Time difference betweeen measures: 902 ms
+I (00:00:15.402) PMS9003: PM1.0: 27
+I (00:00:15.403) PMS9003: PM2.5: 36
+I (00:00:15.403) PMS9003: PM10: 39
+I (00:00:15.404) PMS9003: Time difference betweeen measures: 903 ms
+I (00:00:16.313) PMS9003: PM1.0: 26
+I (00:00:16.313) PMS9003: PM2.5: 36
+I (00:00:16.314) PMS9003: PM10: 39
+I (00:00:16.315) PMS9003: Time difference betweeen measures: 902 ms
+I (00:00:17.224) PMS9003: PM1.0: 25
+I (00:00:17.224) PMS9003: PM2.5: 35
+I (00:00:17.224) PMS9003: PM10: 38
+I (00:00:17.225) PMS9003: Time difference betweeen measures: 902 ms
+I (00:00:18.136) PMS9003: PM1.0: 24
+I (00:00:18.136) PMS9003: PM2.5: 34
+I (00:00:18.136) PMS9003: PM10: 37
+I (00:00:18.137) PMS9003: Time difference betweeen measures: 903 ms
 ...
 ```
 
