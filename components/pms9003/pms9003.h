@@ -15,6 +15,14 @@ typedef enum pms_mode {
     PMS_MODE_PASSIVE,
 } pms_mode_t;
 
+typedef enum pms_status {
+    PMS_STATUS_FAIL = -1,
+    PMS_STATUS_OK = 0,
+    PMS_STATUS_TOO_MANY_FAN_RESTARTS = BIT0,
+    PMS_STATUS_FAN_SPEED_LOW = BIT1,
+    PMS_STATUS_ENVIRONMENTAL_INTERFERENCE = BIT2,
+} pms_status_t;
+
 typedef struct {
     uint16_t pm1_0_std;
     uint16_t pm2_5_std;
@@ -44,5 +52,7 @@ esp_err_t pms9003_sleep(pms9003_handle_t handle, bool sleep);
 esp_err_t pms9003_reset(pms9003_handle_t handle);
 
 esp_err_t pms9003_measure(pms9003_handle_t handle, pms9003_measurement_t *measure, uint16_t timeout_ms);
+
+pms_status_t pms9003_status(pms9003_handle_t handle);
 
 #endif //ESP_IDF_LIB_PMS9003_H

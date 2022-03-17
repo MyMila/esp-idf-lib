@@ -12,6 +12,7 @@
 #define PMS_CMD_LENGTH 7
 #define PMS_MAX_PACKET_LENGTH 32
 #define PMS_TIMEOUT_MS 3000
+#define PMS_ERROR_POSITION 29
 
 #define IOT_CHECK(tag, a, ret)  if(!(a)) {                                             \
         ESP_LOGE(tag,"%s:%d (%s)", __FILE__, __LINE__, __FUNCTION__);      \
@@ -72,8 +73,8 @@ static const char *TAG = "PMS9003";
 static esp_err_t pms9003_unpack(pms_frame_t *frame, pms9003_measurement_t *measure)
 {
     // error code
-    if (frame->data[29] > 0) {
-        ESP_LOGE(TAG, "pms9003_unpack: pms error code: 0x%02hhx", frame->data[29]);
+    if (frame->data[PMS_ERROR_POSITION] > 0) {
+        ESP_LOGE(TAG, "pms9003_unpack: pms error code: 0x%02hhx", frame->data[PMS_ERROR_POSITION]);
         return ESP_FAIL;
     }
 
@@ -521,7 +522,13 @@ static esp_err_t pms9003_passive_read(pms9003_handle_t handle)
  * @param handle PMS driver handler.
  * @param measure Pointer to measurement structure where to store the readings.
  * @param timeout_ms Delay if in passive mode or reading was unsuccessful.
+ *
  * @return
+ *      - ESP_OK
+ *      - ESP_FAIL
+ *      - ESP_ERR_INVALID_CRC
+ *      - ESP_ERR_TIMEOUT
+ *      - ESP_ERR_INVALID_ARG
  */
 esp_err_t pms9003_measure(pms9003_handle_t handle, pms9003_measurement_t *measure, uint16_t timeout_ms)
 {
@@ -547,4 +554,28 @@ esp_err_t pms9003_measure(pms9003_handle_t handle, pms9003_measurement_t *measur
     }
 
     return status;
+}
+
+/**
+ * @brief Returns error code PMS reported in measurement payload
+ *
+ * @param handle PMS driver handler.
+ *
+ * @return
+ *      - PMS_STATUS_OK
+ *      - PMS_STATUS_TOO_MANY_FAN_RESTARTS
+ *      - PMS_STATUS_FAN_SPEED_LOW
+ *      - PMS_STATUS_ENVIRONMENTAL_INTERFERENCE
+ */
+pms_status_t pms9003_status(pms9003_handle_t handle)
+{
+    POINT_ASSERT(TAG, handle, PMS_STATUS_FAIL);
+    pms_device_t *device = (pms_device_t *) handle;
+
+    // If current packet is not measurement payload (most likely ACK), we assume everything is OK
+    if (device->frame.length != PMS_MAX_PACKET_LENGTH) {
+        return PMS_STATUS_OK;
+    }
+
+    return device->frame.data[PMS_ERROR_POSITION];
 }
