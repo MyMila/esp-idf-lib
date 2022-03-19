@@ -19,6 +19,20 @@
         return (ret);                                                                   \
         }
 #define POINT_ASSERT(tag, param, ret)    IOT_CHECK(tag, (param) != NULL, (ret))
+#define SEMAPHORE_TAKE(device) do { \
+        if (!xSemaphoreTake(device->mutex, pdMS_TO_TICKS(1000))) \
+        { \
+            ESP_LOGE(TAG, "could not take device mutex"); \
+            return ESP_ERR_TIMEOUT; \
+        } \
+        } while (0)
+#define SEMAPHORE_GIVE(device) do { \
+        if (!xSemaphoreGive(device->mutex)) \
+        { \
+            ESP_LOGE(TAG, "could not give device mutex"); \
+            return ESP_FAIL; \
+        } \
+        } while (0)
 
 typedef struct pms7003_frame {
     uint8_t data[PMS_MAX_PACKET_LENGTH];
@@ -32,6 +46,7 @@ typedef struct {
     gpio_num_t set_pin;
     gpio_num_t reset_pin;
     pms_frame_t frame;
+    SemaphoreHandle_t mutex;
 } pms_device_t;
 
 typedef enum pms_cmd {
@@ -332,6 +347,13 @@ pms9003_init(uart_port_t port, gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t 
     pms_device_t *device = (pms_device_t *) calloc(1, sizeof(pms_device_t));
     POINT_ASSERT(TAG, device, NULL);
 
+    device->mutex = xSemaphoreCreateMutex();
+    if (!device->mutex)
+    {
+        ESP_LOGE(TAG, "pms9003_init: could not create device mutex");
+        goto err;
+    }
+
     device->reset_pin = reset_pin;
     device->set_pin = set_pin;
     device->port = port;
@@ -349,7 +371,7 @@ pms9003_init(uart_port_t port, gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t 
     status |= uart_set_pin(device->port, tx_pin, rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     status |= uart_driver_install(device->port, PMS_MAX_PACKET_LENGTH * 8, 0, 0, NULL, 0);
 
-    IOT_CHECK(TAG, status == ESP_OK, NULL);
+    if (status != ESP_OK) goto err;
 
     if (device->set_pin > GPIO_NUM_NC) {
         gpio_set_direction(device->set_pin, GPIO_MODE_OUTPUT);
@@ -372,12 +394,13 @@ pms9003_init(uart_port_t port, gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t 
     // Force active mode as a start-up mode
     status |= pms9003_set_mode(device, PMS_MODE_ACTIVE);
 
-    if (status != ESP_OK) {
-        pms9003_free(device);
-        return NULL;
-    }
+    if (status != ESP_OK) goto err;
 
     return (pms9003_handle_t) device;
+
+err:
+    pms9003_free(device);
+    return NULL;
 }
 
 
@@ -395,11 +418,14 @@ pms9003_init(uart_port_t port, gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t 
  *      - ESP_OK
  *      - ESP_FAIL
  *      - ESP_ERR_INVALID_ARG
+ *      - ESP_ERR_TIMEOUT
  */
 esp_err_t pms9003_set_mode(pms9003_handle_t handle, pms_mode_t mode)
 {
     POINT_ASSERT(TAG, handle, ESP_ERR_INVALID_ARG);
     pms_device_t *device = (pms_device_t *) handle;
+
+    SEMAPHORE_TAKE(device);
 
     pms_cmd_t cmd = mode == PMS_MODE_ACTIVE ? CMD_ACTIVE_MODE : CMD_PASSIVE_MODE;
     esp_err_t status = pms9003_do_cmd(handle, true, pms_command_table[cmd], sizeof(pms_command_table[cmd]));
@@ -407,6 +433,8 @@ esp_err_t pms9003_set_mode(pms9003_handle_t handle, pms_mode_t mode)
     if (status == ESP_OK) {
         device->mode = mode;
     }
+
+    SEMAPHORE_GIVE(device);
 
     return status;
 }
@@ -421,6 +449,7 @@ esp_err_t pms9003_set_mode(pms9003_handle_t handle, pms_mode_t mode)
  *      - ESP_OK
  *      - ESP_FAIL
  *      - ESP_ERR_INVALID_ARG
+ *      - ESP_ERR_TIMEOUT
  */
 esp_err_t pms9003_sleep(pms9003_handle_t handle, bool sleep)
 {
@@ -431,11 +460,19 @@ esp_err_t pms9003_sleep(pms9003_handle_t handle, bool sleep)
         return gpio_set_level(device->set_pin, !sleep);
     }
 
+    esp_err_t status = ESP_OK;
+
+    SEMAPHORE_TAKE(device);
+
     pms_cmd_t cmd = sleep ? CMD_SLEEP : CMD_WAKEUP;
     // For some reason PMS only replies with ACK when sensor is put into sleep
     // Therefore we will only wait for it on that command
     bool wait_ack = sleep ? true : false;
-    return pms9003_do_cmd(handle, wait_ack, pms_command_table[cmd], sizeof(pms_command_table[cmd]));
+    status = pms9003_do_cmd(handle, wait_ack, pms_command_table[cmd], sizeof(pms_command_table[cmd]));
+
+    SEMAPHORE_GIVE(device);
+
+    return status;
 }
 
 /**
@@ -457,7 +494,7 @@ esp_err_t pms9003_reset(pms9003_handle_t handle)
 
     esp_err_t status = ESP_ERR_NOT_SUPPORTED;
     if (device->reset_pin > GPIO_NUM_NC) {
-        status |= gpio_set_level(device->reset_pin, 0);
+        status = gpio_set_level(device->reset_pin, 0);
         vTaskDelay(pdMS_TO_TICKS(100));
         status |= gpio_set_level(device->reset_pin, 1);
     }
@@ -481,6 +518,7 @@ esp_err_t pms9003_free(pms9003_handle_t handle)
     pms_device_t *device = (pms_device_t *) handle;
 
     uart_driver_delete(device->port);
+    vSemaphoreDelete(device->mutex);
     free(device);
 
     return ESP_OK;
@@ -537,17 +575,19 @@ esp_err_t pms9003_measure(pms9003_handle_t handle, pms9003_measurement_t *measur
 
     esp_err_t status = ESP_FAIL;
 
+    SEMAPHORE_TAKE(device);
+
     if (device->mode == PMS_MODE_PASSIVE) {
         status = pms9003_passive_read(handle);
         if (status != ESP_OK) {
+            ESP_LOGE(TAG, "pms9003_passive_read: %s", esp_err_to_name(status));
             return ESP_FAIL;
         }
     }
 
     status = pms9003_read_measurement(handle, measure);
-    if (status != ESP_OK) {
-        ESP_LOGE(TAG, "pms9003_read_measurement: error: %s", esp_err_to_name(status));
-    }
+
+    SEMAPHORE_GIVE(device);
 
     if (device->mode == PMS_MODE_PASSIVE || status != ESP_OK) {
         vTaskDelay(pdMS_TO_TICKS(timeout_ms));
