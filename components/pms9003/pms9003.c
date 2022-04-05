@@ -310,7 +310,11 @@ static esp_err_t pms9003_do_cmd(pms9003_handle_t handle, bool wait_ack, const ui
     POINT_ASSERT(TAG, handle, ESP_ERR_INVALID_ARG);
     pms_device_t *device = (pms_device_t *) handle;
 
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 3, 0)
+    int ret = uart_write_bytes(device->port, (const char*) cmd, size);
+#else
     int ret = uart_write_bytes(device->port, cmd, size);
+#endif
     esp_err_t status = ret > 0 ? ESP_OK : ESP_FAIL;
 
     status |= uart_wait_tx_done(device->port, pdMS_TO_TICKS(1000));
