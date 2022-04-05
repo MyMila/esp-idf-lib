@@ -311,7 +311,7 @@ static esp_err_t pms9003_do_cmd(pms9003_handle_t handle, bool wait_ack, const ui
     pms_device_t *device = (pms_device_t *) handle;
 
 #if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 3, 0)
-    int ret = uart_write_bytes(device->port, (const char*) cmd, size);
+    int ret = uart_write_bytes(device->port, (const char *) cmd, size);
 #else
     int ret = uart_write_bytes(device->port, cmd, size);
 #endif
@@ -352,8 +352,7 @@ pms9003_init(uart_port_t port, gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t 
     POINT_ASSERT(TAG, device, NULL);
 
     device->mutex = xSemaphoreCreateMutex();
-    if (!device->mutex)
-    {
+    if (!device->mutex) {
         ESP_LOGE(TAG, "pms9003_init: could not create device mutex");
         goto err;
     }
@@ -402,7 +401,7 @@ pms9003_init(uart_port_t port, gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t 
 
     return (pms9003_handle_t) device;
 
-err:
+    err:
     pms9003_free(device);
     return NULL;
 }
