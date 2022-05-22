@@ -369,10 +369,16 @@ pms9003_init(uart_port_t port, gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t 
             .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
     };
 
+    int intr_alloc_flags = 0;
+
+#if CONFIG_UART_ISR_IN_IRAM
+    intr_alloc_flags = ESP_INTR_FLAG_IRAM;
+#endif
+
     esp_err_t status = ESP_OK;
     status |= uart_param_config(device->port, &uart_config);
     status |= uart_set_pin(device->port, tx_pin, rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-    status |= uart_driver_install(device->port, PMS_MAX_PACKET_LENGTH * 8, 0, 0, NULL, 0);
+    status |= uart_driver_install(device->port, PMS_MAX_PACKET_LENGTH * 8, 0, 0, NULL, intr_alloc_flags);
 
     if (status != ESP_OK) goto err;
 
