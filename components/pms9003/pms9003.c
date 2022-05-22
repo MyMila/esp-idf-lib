@@ -399,7 +399,7 @@ pms9003_init(uart_port_t port, gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t 
     status |= pms9003_sleep(device, false);
     // Some time for sensor to react and start responding
     // If delay is too small PMS won't send ACK for mode command
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    vTaskDelay(pdMS_TO_TICKS(3000));
     // Force active mode as a start-up mode
     status |= pms9003_set_mode(device, PMS_MODE_ACTIVE);
 
