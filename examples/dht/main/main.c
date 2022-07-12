@@ -1,33 +1,34 @@
-#include <stdio.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <dht.h>
+#include <esp_log.h>
 
-static const dht_sensor_type_t sensor_type = DHT_TYPE_AM2301;
 #if defined(CONFIG_IDF_TARGET_ESP8266)
 static const gpio_num_t dht_gpio = 4;
 #else
-static const gpio_num_t dht_gpio = 17;
+static const gpio_num_t dht_gpio = GPIO_NUM_26;
 #endif
 
+static const char *TAG = "DHT";
 
 void dht_test(void *pvParameters)
 {
-    int16_t temperature = 0;
-    int16_t humidity = 0;
+    dht_handle_t handle = NULL;
 
-    // DHT sensors that come mounted on a PCB generally have
-    // pull-up resistors on the data pin.  It is recommended
-    // to provide an external pull-up resistor otherwise...
+    do {
+        handle = dht_init(dht_gpio, DHT_TYPE_AM2301, DHT_MODE_ASYNC);
+        if (handle == NULL) {
+            ESP_LOGE(TAG, "dht_init: failed to init");
+        }
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    } while (handle == NULL);
 
-    //gpio_set_pull_mode(dht_gpio, GPIO_PULLUP_ONLY);
-
-    while (1)
-    {
-        if (dht_read_data(sensor_type, dht_gpio, &humidity, &temperature) == ESP_OK)
-            printf("Humidity: %d%% Temp: %dC\n", humidity / 10, temperature / 10);
+    esp_err_t err;
+    while (1) {
+        if ((err = dht_read(handle)) == ESP_OK)
+            ESP_LOGI(TAG, "dht_read: humidity: %f%% temp: %fC", dht_humidity(handle), dht_temperature(handle));
         else
-            printf("Could not read data from sensor\n");
+            ESP_LOGE(TAG, "dht_read: error: %s", esp_err_to_name(err));
 
         // If you read the sensor data too often, it will heat up
         // http://www.kandrsmith.org/RJS/Misc/Hygrometers/dht_sht_how_fast.html
