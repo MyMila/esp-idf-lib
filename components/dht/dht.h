@@ -63,34 +63,56 @@ typedef enum
     DHT_TYPE_SI7021       //!< Itead Si7021
 } dht_sensor_type_t;
 
+typedef enum
+{
+    DHT_MODE_AWAIT,
+    DHT_MODE_ASYNC
+} dht_mode_t;
+
+typedef void *dht_handle_t;
+
+/**
+ * @brief Initialize dht sensor struct
+ *
+ * @param[in] pin GPIO pin
+ * @param[in] type Sensor type
+ * @param[in] mode Reading mode
+ *
+ * @return
+ *  - dht_handle_t
+ *  - NULL
+ */
+dht_handle_t dht_init(gpio_num_t pin, dht_sensor_type_t type, dht_mode_t mode);
+
+/**
+ * @brief Temperature getter
+ *
+ * Temperature is returned as floats.
+ *
+ * @param[in] handle Sensor handle
+ *
+ * @return Temperature, degrees Celsius, nullable
+ */
+float dht_temperature(dht_handle_t handle);
+
+/**
+ * @brief Humidity getter
+ *
+ * Humidity is returned as floats.
+ *
+ * @param[in] handle Sensor handle
+ *
+ * @return Humidity, percents, nullable
+ */
+float dht_humidity(dht_handle_t handle);
+
 /**
  * @brief Read integer data from sensor on specified pin
  *
- * Humidity and temperature are returned as integers.
- * For example: humidity=625 is 62.5 %, temperature=244 is 24.4 degrees Celsius
- *
- * @param sensor_type DHT11 or DHT22
- * @param pin GPIO pin connected to sensor OUT
- * @param[out] humidity Humidity, percents * 10, nullable
- * @param[out] temperature Temperature, degrees Celsius * 10, nullable
+ * @param[in] dht_handle_t Sensor handle
  * @return `ESP_OK` on success
  */
-esp_err_t dht_read_data(dht_sensor_type_t sensor_type, gpio_num_t pin,
-        int16_t *humidity, int16_t *temperature);
-
-/**
- * @brief Read float data from sensor on specified pin
- *
- * Humidity and temperature are returned as floats.
- *
- * @param sensor_type DHT11 or DHT22
- * @param pin GPIO pin connected to sensor OUT
- * @param[out] humidity Humidity, percents, nullable
- * @param[out] temperature Temperature, degrees Celsius, nullable
- * @return `ESP_OK` on success
- */
-esp_err_t dht_read_float_data(dht_sensor_type_t sensor_type, gpio_num_t pin,
-        float *humidity, float *temperature);
+esp_err_t dht_read(dht_handle_t handle);
 
 #ifdef __cplusplus
 }
