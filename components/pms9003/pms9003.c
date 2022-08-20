@@ -90,7 +90,6 @@ static esp_err_t pms9003_unpack(pms_frame_t *frame, pms9003_measurement_t *measu
     // error code
     if (frame->data[PMS_ERROR_POSITION] > 0) {
         ESP_LOGE(TAG, "pms9003_unpack: pms error code: 0x%02hhx", frame->data[PMS_ERROR_POSITION]);
-        return ESP_FAIL;
     }
 
     measure->pm1_0_std = (frame->data[4] << 8) | frame->data[5];
