@@ -45,6 +45,8 @@ static esp_err_t ens160_set_mode(i2c_dev_t *dev, uint8_t mode)
 
 esp_err_t ens160_init_desc(i2c_dev_t *dev, uint8_t addr, i2c_port_t port, gpio_num_t sda_gpio, gpio_num_t scl_gpio)
 {
+    esp_err_t res = ESP_OK;
+
     CHECK_ARG(dev);
 
     dev->port = port;
@@ -61,11 +63,13 @@ esp_err_t ens160_init_desc(i2c_dev_t *dev, uint8_t addr, i2c_port_t port, gpio_n
 
     uint16_t part_id;
     if (ens160_part_id(dev, &part_id) != ESP_OK) {
-        return ESP_FAIL;
+        res = ESP_FAIL;
+        goto err;
     }
 
     if (part_id != ENS160_PARTID) {
-        return ESP_FAIL;
+        res = ESP_FAIL;
+        goto err;
     }
 
     uint8_t fw_version[3] = { 0 };
@@ -76,14 +80,20 @@ esp_err_t ens160_init_desc(i2c_dev_t *dev, uint8_t addr, i2c_port_t port, gpio_n
     }
 
     if (ens160_reset(dev) != ESP_OK) {
-        return ESP_FAIL;
+        res = ESP_FAIL;
+        goto err;
     }
 
     if (ens160_set_mode(dev, ENS160_OPMODE_STD) != ESP_OK) {
-        return ESP_FAIL;
+        res = ESP_FAIL;
+        goto err;
     }
 
-    return ESP_OK;
+err:
+    if (res == ESP_FAIL) {
+        i2c_dev_delete_mutex(dev);
+    }
+    return res;
 }
 
 esp_err_t ens160_versions(i2c_dev_t *dev, uint8_t (*fw_version)[3], uint8_t (*hw_version)[2])
