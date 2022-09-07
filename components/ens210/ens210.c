@@ -61,6 +61,7 @@ esp_err_t static ens210_low_power(i2c_dev_t *dev, bool enable)
 
 esp_err_t ens210_init_desc(i2c_dev_t *dev, i2c_port_t port, gpio_num_t sda_gpio, gpio_num_t scl_gpio)
 {
+    esp_err_t res = ESP_OK;
     CHECK_ARG(dev);
 
     dev->port = port;
@@ -82,7 +83,8 @@ esp_err_t ens210_init_desc(i2c_dev_t *dev, i2c_port_t port, gpio_num_t sda_gpio,
     // Restart is needed as ENS210 seems to use previous baseline when starting, causing wrong values
     err = ens210_reset(dev);
     if (err != ESP_OK) {
-        return err;
+        res = ESP_FAIL;
+        goto err;
     }
 
     // Wait 10ms for the ENS210 to boot
@@ -90,17 +92,22 @@ esp_err_t ens210_init_desc(i2c_dev_t *dev, i2c_port_t port, gpio_num_t sda_gpio,
 
     err = ens210_version(dev, &part_id, &uid);
     if (err != ESP_OK) {
-        return err;
+        res = ESP_FAIL;
+        goto err;
     }
 
     // Disable low power, to run more stable
     err = ens210_low_power(dev, false);
     if (err != ESP_OK) {
-        return err;
+        res = ESP_FAIL;
+        goto err;
     }
 
     ens210.available = part_id == ENS210_PARTID;
-
+err:
+    if (res == ESP_FAIL) {
+        i2c_dev_delete_mutex(dev);
+    }
     return ESP_OK;
 }
 
