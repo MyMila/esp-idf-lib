@@ -13,6 +13,7 @@
 #define CHECK_ARG(ARG) do { if (!(ARG)) return ESP_ERR_INVALID_ARG; } while (0)
 
 static const char *TAG = "ENS160";
+static const uint8_t ENS160_BL_MAGIC[4] = {0x53, 0xCE, 0x1A, 0xBF};
 
 // Initialize idle mode and confirms
 static esp_err_t ens160_clear_command(i2c_dev_t *dev)
@@ -32,7 +33,7 @@ static esp_err_t ens160_clear_command(i2c_dev_t *dev)
     return ESP_OK;
 }
 
-static esp_err_t ens160_set_mode(i2c_dev_t *dev, uint8_t mode)
+esp_err_t ens160_set_mode(i2c_dev_t *dev, uint8_t mode)
 {
     CHECK_ARG(dev);
 
@@ -94,6 +95,87 @@ err:
         i2c_dev_delete_mutex(dev);
     }
     return res;
+}
+
+/**
+ * @brief Helper method for sending commands and verifying responses in bootloader mode
+ * @param dev
+ * @param command
+ * @return
+ */
+static ens160_bl_err_t ens160_bl_write(i2c_dev_t *dev, uint8_t command)
+{
+    CHECK_ARG(dev);
+
+    uint8_t data;
+
+    // In bootloader, commands should be sent as NOP, followed by command
+    I2C_DEV_TAKE_MUTEX(dev);
+    data = ENS160_COMMAND_NOP;
+    I2C_DEV_CHECK(dev, i2c_dev_write_reg(dev, ENS160_REG_COMMAND, &data, 1));
+    I2C_DEV_CHECK(dev, i2c_dev_write_reg(dev, ENS160_REG_COMMAND, &command, 1));
+    I2C_DEV_GIVE_MUTEX(dev);
+
+    // Wait on command to execute and data to be available for reading
+    uint8_t i = 0;
+    do {
+        vTaskDelay(pdMS_TO_TICKS(10));
+
+        I2C_DEV_TAKE_MUTEX(dev);
+        I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS160_REG_DATA_STATUS, &data, 1));
+        I2C_DEV_GIVE_MUTEX(dev);
+
+        i++;
+    } while (!IS_NEWGPR(data) && i < 10);
+
+    if (!IS_NEWGPR(data)) {
+        return ENS160_ERR_BL_UNKNOWN;
+    }
+
+    I2C_DEV_TAKE_MUTEX(dev);
+    uint8_t status[2] = { 0 };
+    I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS160_REG_GPR_READ_6, &data, 2));
+    I2C_DEV_GIVE_MUTEX(dev);
+
+    // GPR_READ_6 should be command + 1 if command was successful
+    // GPR_READ_7 stored error code in case of error
+    return status[1] != (command + 1) ? status[0] : ENS160_ERR_BL_OK;
+}
+
+esp_err_t ens160_reset_baseline(i2c_dev_t *dev, ens160_bl_err_t* err)
+{
+    CHECK_ARG(dev);
+
+    /*
+     * Bootloader can be entered only from if it's first issues OPMODE after power-on reset.
+     * Because of this we're first performing reset to enter bootloader mode.
+     */
+    if (ens160_reset(dev) != ESP_OK) {
+        return ESP_FAIL;
+    }
+
+    if (ens160_set_mode(dev, ENS160_OPMODE_BOOTLOADER) != ESP_OK) {
+        return ESP_FAIL;
+    }
+
+    // Write magic
+    I2C_DEV_TAKE_MUTEX(dev);
+    I2C_DEV_CHECK(dev, i2c_dev_write_reg(dev, ENS160_REG_GPR_WRITE_0, &ENS160_BL_MAGIC, 4));
+    I2C_DEV_GIVE_MUTEX(dev);
+
+    // Start bootloader
+    if ((*err = ens160_bl_write(dev, ENS160_BL_CMD_START)) != ENS160_ERR_BL_OK) {
+        ESP_LOGE(TAG, "ens160_bl_write: bl start cmd failed");
+        return ESP_FAIL;
+    }
+
+    // Erase baseline
+    if ((*err = ens160_bl_write(dev, ENS160_BL_CMD_ERASE_BLINE)) != ENS160_ERR_BL_OK) {
+        ESP_LOGE(TAG, "ens160_bl_write: bl erase baseline cmd failed");
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
 }
 
 esp_err_t ens160_versions(i2c_dev_t *dev, uint8_t (*fw_version)[3], uint8_t (*hw_version)[2])
