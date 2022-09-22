@@ -101,6 +101,27 @@ typedef enum {
     ENS160_AQI_UNHEALTHY,
 } ens160_aqi_t;
 
+typedef enum {
+    // Everything is ok
+    ENS160_ERR_BL_OK = 0x00,
+    // Unable to start application update mode
+    ENS160_ERR_BL_START = 0x40,
+    // Unable to erase app or baseline
+    ENS160_ERR_BL_ERASE = 0x01,
+    // Unable to perform FLASH write
+    ENS160_ERR_BL_WRITE = 0x04,
+    // No erase performed before write
+    ENS160_ERR_BL_SEQ = 0x08,
+    // App verification failed
+    ENS160_ERR_BL_VERIFY = 0x02,
+    // Reporting bootloader or app version failed
+    ENS160_ERR_BL_VERSION = 0x10,
+    // Unable to set OEM magic word
+    ENS160_ERR_BL_MAGICSET = 0x80,
+    // Unknown command supplied
+    ENS160_ERR_BL_UNKNOWN = 0x20,
+} ens160_bl_err_t;
+
 /**
 * @brief Initialize device descriptor
 *
@@ -185,6 +206,21 @@ esp_err_t ens160_set_environmental_data(i2c_dev_t *dev, float temperature, float
 esp_err_t
 ens160_measure(i2c_dev_t *dev, bool wait_for_new, ens160_aqi_t *aqi, uint16_t *tvoc, uint16_t *eco2,
                uint32_t (*resistance)[4], uint32_t (*baseline)[4]);
+
+/**
+ * @brief Reset baseline
+ * @param dev I2C device descriptor
+ * @param error error response
+ */
+esp_err_t ens160_reset_baseline(i2c_dev_t *dev, ens160_bl_err_t* err);
+
+/**
+ * @brief Set mode
+ * @param dev I2C device descriptor
+ * @param mode mode in which sensor will be running
+ * @return
+ */
+esp_err_t ens160_set_mode(i2c_dev_t *dev, uint8_t mode);
 
 #ifdef    __cplusplus
 }
