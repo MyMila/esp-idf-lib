@@ -69,6 +69,23 @@ typedef enum
     DHT_MODE_ASYNC
 } dht_mode_t;
 
+typedef enum {
+    DHT_STATE_STOPPED,
+    DHT_STATE_RESPONSE,
+    DHT_STATE_DATA,
+    DHT_STATE_ACQUIRED,
+} dht_state_t;
+
+typedef enum {
+    DHT_ERROR_NOT_STARTED,
+    DHT_ERROR_CHECKSUM,
+    DHT_ERROR_ISR_TIMEOUT,
+    DHT_ERROR_RESPONSE_TIMEOUT,
+    DHT_ERROR_DATA_TIMEOUT,
+    DHT_ERROR_ACQUIRING,
+    DHT_ERROR_DELTA,
+} dht_err_t;
+
 typedef void *dht_handle_t;
 
 /**
@@ -113,6 +130,33 @@ float dht_humidity(dht_handle_t handle);
  * @return `ESP_OK` on success
  */
 esp_err_t dht_read(dht_handle_t handle);
+
+/**
+ * @brief Returns current DHT state.
+ *
+ * @param[in] dht_handle_t Sensor handle
+ * @return
+ *  - DHT_STATE_STOPPED
+ *  - DHT_STATE_RESPONSE
+ *  - DHT_STATE_DATA
+ *  - DHT_STATE_ACQUIRED
+ */
+dht_state_t dht_state(dht_handle_t handle);
+
+/**
+ * @brief Returns current DHT error.
+ *
+ * @param[in] dht_handle_t Sensor handle
+ * @return
+ *  - DHT_ERROR_NOT_STARTED
+ *  - DHT_ERROR_CHECKSUM
+ *  - DHT_ERROR_ISR_TIMEOUT
+ *  - DHT_ERROR_RESPONSE_TIMEOUT
+ *  - DHT_ERROR_DATA_TIMEOUT
+ *  - DHT_ERROR_ACQUIRING
+ *  - DHT_ERROR_DELTA
+ */
+dht_err_t dht_error(dht_handle_t handle);
 
 #ifdef __cplusplus
 }

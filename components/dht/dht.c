@@ -127,13 +127,6 @@ static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
         } \
     } while (0)
 
-typedef enum {
-    DHT_STATE_STOPPED,
-    DHT_STATE_RESPONSE,
-    DHT_STATE_DATA,
-    DHT_STATE_ACQUIRED,
-} dht_state_t;
-
 typedef struct {
     dht_sensor_type_t type;
     gpio_num_t pin;
@@ -142,6 +135,7 @@ typedef struct {
     uint8_t count;
     uint8_t data[DHT_DATA_BYTES];
     dht_state_t state;
+    dht_err_t error;
     int16_t humidity;
     int16_t temperature;
     int64_t read_started_at;
@@ -179,6 +173,7 @@ static void isr_handler(void *arg)
     sensor->read_started_at = current_time;
 
     if (delta > 6000) {
+        sensor->error = DHT_ERROR_ISR_TIMEOUT;
         sensor->state = DHT_STATE_STOPPED;
         gpio_intr_disable(sensor->pin);
         return;
@@ -192,6 +187,7 @@ static void isr_handler(void *arg)
             if (125 < delta && delta < DHT_RESPONSE_MAX_TIMING) {
                 sensor->state = DHT_STATE_DATA;
             } else {
+                sensor->error = DHT_ERROR_RESPONSE_TIMEOUT;
                 sensor->state = DHT_STATE_STOPPED;
                 gpio_intr_disable(sensor->pin);
             }
@@ -208,6 +204,7 @@ static void isr_handler(void *arg)
                         // Verify checksum
                         uint8_t sum = sensor->data[0] + sensor->data[1] + sensor->data[2] + sensor->data[3];
                         if (sensor->data[4] != sum) {
+                            sensor->error = DHT_ERROR_CHECKSUM;
                             sensor->state = DHT_STATE_STOPPED;
                         } else {
                             sensor->humidity = dht_convert_data(sensor->type, sensor->data[0], sensor->data[1]);
@@ -217,7 +214,12 @@ static void isr_handler(void *arg)
                         break;
                     }
                 } else sensor->count--;
+            } else if (delta < 10) {
+                sensor->error = DHT_ERROR_DELTA;
+                sensor->state = DHT_STATE_STOPPED;
+                gpio_intr_disable(sensor->pin);
             } else {
+                sensor->error = DHT_ERROR_DATA_TIMEOUT;
                 sensor->state = DHT_STATE_STOPPED;
                 gpio_intr_disable(sensor->pin);
             }
@@ -237,6 +239,8 @@ dht_handle_t dht_init(gpio_num_t pin, dht_sensor_type_t type, dht_mode_t mode)
     sensor->pin = pin;
     sensor->type = type;
     sensor->mode = mode;
+    sensor->error = DHT_ERROR_NOT_STARTED;
+    sensor->state = DHT_STATE_STOPPED;
 
     esp_err_t res = ESP_OK;
     if (mode == DHT_MODE_ASYNC) {
@@ -348,16 +352,22 @@ static esp_err_t dht_await_read(dht_sensor_t *sensor)
     gpio_set_direction(sensor->pin, GPIO_MODE_OUTPUT_OD);
     gpio_set_level(sensor->pin, 1);
 
-    if (result != ESP_OK)
+    if (result != ESP_OK) {
+        sensor->error = DHT_ERROR_RESPONSE_TIMEOUT;
+        sensor->state = DHT_STATE_STOPPED;
         return result;
+    }
 
     if (sensor->data[4] != ((sensor->data[0] + sensor->data[1] + sensor->data[2] + sensor->data[3]) & 0xFF)) {
         ESP_LOGE(TAG, "Checksum failed, invalid data received from sensor");
+        sensor->error = DHT_ERROR_CHECKSUM;
+        sensor->state = DHT_STATE_STOPPED;
         return ESP_ERR_INVALID_CRC;
     }
 
     sensor->humidity = dht_convert_data(sensor->type, sensor->data[0], sensor->data[1]);
     sensor->temperature = dht_convert_data(sensor->type, sensor->data[2], sensor->data[3]);
+    sensor->state = DHT_STATE_ACQUIRED;
 
     ESP_LOGD(TAG, "Sensor data: humidity=%d, temp=%d", sensor->humidity, sensor->temperature);
 
@@ -366,8 +376,6 @@ static esp_err_t dht_await_read(dht_sensor_t *sensor)
 
 static esp_err_t dht_async_read(dht_sensor_t *sensor)
 {
-    sensor->state = DHT_STATE_RESPONSE;
-
     // Phase 'A' pulling signal low to initiate read sequence
     gpio_set_direction(sensor->pin, GPIO_MODE_OUTPUT_OD);
     gpio_set_level(sensor->pin, 0);
@@ -387,12 +395,14 @@ esp_err_t dht_read(dht_handle_t handle)
     dht_sensor_t *sensor = (dht_sensor_t *) handle;
 
     if (sensor->state != DHT_STATE_STOPPED && sensor->state != DHT_STATE_ACQUIRED) {
+        ESP_LOGW(TAG, "dht_read: unable to read, state(%d), error(%d)", sensor->state, sensor->error);
         return ESP_FAIL;
     }
 
     memset(sensor->data, 0, sizeof(sensor->data));
     sensor->count = 7;
     sensor->index = 0;
+    sensor->state = DHT_STATE_RESPONSE;
 
     return sensor->mode == DHT_MODE_AWAIT
            ? dht_await_read(sensor)
@@ -401,14 +411,28 @@ esp_err_t dht_read(dht_handle_t handle)
 
 float dht_temperature(dht_handle_t handle)
 {
-    POINT_ASSERT(TAG, handle, ESP_FAIL);
+    POINT_ASSERT(TAG, handle, 0);
 
-    return ((dht_sensor_t *) handle)->temperature / 10.0f;
+    return (float)((dht_sensor_t *) handle)->temperature / 10.0f;
 }
 
 float dht_humidity(dht_handle_t handle)
 {
-    POINT_ASSERT(TAG, handle, ESP_FAIL);
+    POINT_ASSERT(TAG, handle, 0);
 
-    return ((dht_sensor_t *) handle)->humidity / 10.0f;
+    return (float)((dht_sensor_t *) handle)->humidity / 10.0f;
+}
+
+dht_state_t dht_state(dht_handle_t handle)
+{
+    POINT_ASSERT(TAG, handle, DHT_STATE_STOPPED);
+
+    return ((dht_sensor_t *) handle)->state;
+}
+
+dht_err_t dht_error(dht_handle_t handle)
+{
+    POINT_ASSERT(TAG, handle, DHT_ERROR_NOT_STARTED);
+
+    return ((dht_sensor_t *) handle)->error;
 }
