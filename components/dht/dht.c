@@ -173,9 +173,9 @@ static void isr_handler(void *arg)
     sensor->read_started_at = current_time;
 
     if (delta > 6000) {
+        gpio_intr_disable(sensor->pin);
         sensor->error = DHT_ERROR_ISR_TIMEOUT;
         sensor->state = DHT_STATE_STOPPED;
-        gpio_intr_disable(sensor->pin);
         return;
     }
     switch (sensor->state) {
@@ -187,9 +187,9 @@ static void isr_handler(void *arg)
             if (125 < delta && delta < DHT_RESPONSE_MAX_TIMING) {
                 sensor->state = DHT_STATE_DATA;
             } else {
+                gpio_intr_disable(sensor->pin);
                 sensor->error = DHT_ERROR_RESPONSE_TIMEOUT;
                 sensor->state = DHT_STATE_STOPPED;
-                gpio_intr_disable(sensor->pin);
             }
             break;
         case DHT_STATE_DATA:          // Spec: 50us low followed by high of 26-28us = 0, 70us = 1
@@ -215,13 +215,13 @@ static void isr_handler(void *arg)
                     }
                 } else sensor->count--;
             } else if (delta < 10) {
+                gpio_intr_disable(sensor->pin);
                 sensor->error = DHT_ERROR_DELTA;
                 sensor->state = DHT_STATE_STOPPED;
-                gpio_intr_disable(sensor->pin);
             } else {
+                gpio_intr_disable(sensor->pin);
                 sensor->error = DHT_ERROR_DATA_TIMEOUT;
                 sensor->state = DHT_STATE_STOPPED;
-                gpio_intr_disable(sensor->pin);
             }
             break;
         default:
@@ -394,7 +394,12 @@ esp_err_t dht_read(dht_handle_t handle)
 
     dht_sensor_t *sensor = (dht_sensor_t *) handle;
 
-    if (sensor->state != DHT_STATE_STOPPED && sensor->state != DHT_STATE_ACQUIRED) {
+    int64_t current_time = esp_timer_get_time();
+    int64_t delta = (current_time - sensor->read_started_at);
+
+    if (sensor->state == DHT_STATE_DATA && delta >= 5000) {
+        ESP_LOGW(TAG, "dht_read: data state timeout");
+    } else if (sensor->state != DHT_STATE_STOPPED && sensor->state != DHT_STATE_ACQUIRED) {
         ESP_LOGW(TAG, "dht_read: unable to read, state(%d), error(%d)", sensor->state, sensor->error);
         return ESP_FAIL;
     }
