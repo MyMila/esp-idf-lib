@@ -110,7 +110,7 @@ dht_handle_t dht_init(gpio_num_t pin, dht_sensor_type_t type, dht_mode_t mode);
  *
  * @return Temperature, degrees Celsius, nullable
  */
-float dht_temperature(dht_handle_t handle);
+int32_t dht_temperature(dht_handle_t handle);
 
 /**
  * @brief Humidity getter
@@ -121,7 +121,7 @@ float dht_temperature(dht_handle_t handle);
  *
  * @return Humidity, percents, nullable
  */
-float dht_humidity(dht_handle_t handle);
+int32_t dht_humidity(dht_handle_t handle);
 
 /**
  * @brief Read integer data from sensor on specified pin

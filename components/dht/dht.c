@@ -414,18 +414,18 @@ esp_err_t dht_read(dht_handle_t handle)
            : dht_async_read(sensor);
 }
 
-float dht_temperature(dht_handle_t handle)
+int32_t dht_temperature(dht_handle_t handle)
 {
     POINT_ASSERT(TAG, handle, 0);
 
-    return (float)((dht_sensor_t *) handle)->temperature / 10.0f;
+    return ( (int32_t)( ((dht_sensor_t *) handle)->temperature ) << 16 ) / 10;
 }
 
-float dht_humidity(dht_handle_t handle)
+int32_t dht_humidity(dht_handle_t handle)
 {
     POINT_ASSERT(TAG, handle, 0);
 
-    return (float)((dht_sensor_t *) handle)->humidity / 10.0f;
+    return ( (int32_t)( ((dht_sensor_t *) handle)->humidity ) << 16 ) / 10;
 }
 
 dht_state_t dht_state(dht_handle_t handle)
