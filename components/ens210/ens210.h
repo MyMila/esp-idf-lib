@@ -73,7 +73,7 @@ esp_err_t ens210_reset(i2c_dev_t *dev);
  * @return  - ESP_OK - success
  *          - ESP_FAIL - fail
  */
-esp_err_t ens210_measure(i2c_dev_t *dev, float *temperature, float *humidity);
+esp_err_t ens210_measure(i2c_dev_t *dev, int32_t *temperature, int32_t *humidity);
 
 /**
  * @brief Set soldering correction used to compensate temperature difference caused by soldering
@@ -97,7 +97,7 @@ void ens210_set_correction(i2c_dev_t *dev, uint8_t correction);
  * @param humidity Humidity reading in percentage
  * @return Absolute humidity
  */
-float ens210_absolute_humidity(float temperature, float humidity);
+int32_t ens210_absolute_humidity(int32_t temperature, int32_t humidity);
 
 /**
  * @brief Get ENS210 availability

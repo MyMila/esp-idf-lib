@@ -337,12 +337,12 @@ static esp_err_t ens160_set_env_data_ens210(i2c_dev_t *dev, uint16_t temperature
     return ESP_OK;
 }
 
-esp_err_t ens160_set_environmental_data(i2c_dev_t *dev, float temperature, float humidity)
+esp_err_t ens160_set_environmental_data(i2c_dev_t *dev, int32_t temperature, int32_t humidity)
 {
     CHECK_ARG(dev);
 
-    uint16_t t_data = (uint16_t) ((temperature + 273.15f) * 64.0f);
-    uint16_t rh_data = (uint16_t) (humidity * 512.0f);
+    uint16_t t_data = (uint16_t) (((temperature + (int32_t)(273.15*65536)) >> 16) * 64);
+    uint16_t rh_data = (uint16_t) ((humidity * 512) >> 16);
 
     return ens160_set_env_data_ens210(dev, t_data, rh_data);
 }

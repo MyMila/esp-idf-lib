@@ -192,7 +192,7 @@ esp_err_t ens160_flash_firmware(i2c_dev_t *dev, const uint8_t *app_img, int size
  * @return - ESP_OK - success
  *         - ESP_FAIL - fail
  */
-esp_err_t ens160_set_environmental_data(i2c_dev_t *dev, float temperature, float humidity);
+esp_err_t ens160_set_environmental_data(i2c_dev_t *dev, int32_t temperature, int32_t humidity);
 
 /**
  * @brief Get TVOC, eCO2, AQI and NO2 readings

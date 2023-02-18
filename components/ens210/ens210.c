@@ -191,29 +191,31 @@ static esp_err_t read(i2c_dev_t *dev, uint32_t *t_data, uint32_t *h_data)
     return res;
 }
 
-static float ens210_to_celsius(uint32_t t_data)
+static int32_t ens210_to_celsius(uint32_t t_data)
 {
     // Force 32 bits
-    float t = t_data & 0xFFFF;
+    uint32_t t = t_data & 0xFFFF;
     // Compensate for soldering effect
     t -= ens210.soldering_correction;
     // Return m*C. This equals m*(K-273.15) = m*K - 27315*m/100 = m*t/64 - 27315*m/100
     // Note m is the multiplier, C is temperature in Celsius, K is temperature in Kelvin, t is raw t_data value.
     // Uses C=K-273.15 and K=t/64.
-    return t / 64 - 27315L / 100;
+    //return t / 64 - 27315L / 100;
+    return ((int32_t)(t) << (16 - 6)) - (int32_t)(273.15*65536.0); // 16 bit fixed-point
 }
 
-static float ens210_to_humidity(uint32_t h_data)
+static int32_t ens210_to_humidity(uint32_t h_data)
 {
     // Force 32 bits
-    float h = h_data & 0xFFFF;
+    uint32_t h = h_data & 0xFFFF;
     // Return m*H. This equals m*(h/512) = (m*h)/512
     // Note m is the multiplier, H is the relative humidity in %RH, h is raw h_data value.
     // Uses H=h/512.
-    return h / 512;
+    //return h / 512;
+    return h << (16 - 9); // 16 bit fixed-point
 }
 
-esp_err_t ens210_measure(i2c_dev_t *dev, float *temperature, float *humidity)
+esp_err_t ens210_measure(i2c_dev_t *dev, int32_t *temperature, int32_t *humidity)
 {
     uint32_t t_val;
     uint32_t h_val;
@@ -245,7 +247,7 @@ esp_err_t ens210_measure(i2c_dev_t *dev, float *temperature, float *humidity)
     return ESP_OK;
 }
 
-float ens210_absolute_humidity(float temperature, float humidity)
+int32_t ens210_absolute_humidity(int32_t temperature, int32_t humidity)
 {
     //taken from https://carnotcycle.wordpress.com/2012/08/04/how-to-convert-relative-humidity-to-absolute-humidity/
     //precision is about 0.1°C in range -30 to 35°C
@@ -253,8 +255,9 @@ float ens210_absolute_humidity(float temperature, float humidity)
     //Buck (1981)     6.1121 exp(17.502 x T)/(T + 240.97)
     //reference https://www.eas.ualberta.ca/jdwilson/EAS372_13/Vomel_CIRES_satvpformulae.html    // Use Buck (1981)
 
-    return (6.1121 * pow(2.718281828, (17.67 * temperature) / (temperature + 243.5)) * humidity * MOLAR_MASS_OF_WATER) /
-           ((273.15 + temperature) * UNIVERSAL_GAS_CONSTANT);
+    //return (6.1121 * pow(2.718281828, (17.67 * temperature) / (temperature + 243.5)) * humidity * MOLAR_MASS_OF_WATER) /
+    //       ((273.15 + temperature) * UNIVERSAL_GAS_CONSTANT);
+    return 0;
 }
 
 void ens210_set_correction(i2c_dev_t *dev, uint8_t correction)
