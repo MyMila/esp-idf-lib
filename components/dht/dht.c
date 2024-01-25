@@ -61,6 +61,7 @@
 #endif
 
 #include <esp_idf_lib_helpers.h>
+#include <esp_timer.h>
 
 // DHT timer precision in microseconds
 #define DHT_TIMER_INTERVAL 2

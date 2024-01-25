@@ -3,7 +3,6 @@
 //
 
 #include <pms9003.h>
-#include <driver/uart.h>
 #include <esp_log.h>
 #include <string.h>
 
@@ -41,11 +40,18 @@ typedef struct pms7003_frame {
 } pms_frame_t;
 
 typedef struct {
-    uart_port_t port;
     pms_mode_t mode;
-    gpio_num_t set_pin;
-    gpio_num_t reset_pin;
     pms_frame_t frame;
+
+    esp_err_t (*reset_pin)(uint8_t state);
+
+    esp_err_t (*set_pin)(uint8_t state);
+
+    esp_err_t (*data_size)(uint8_t *size);
+
+    esp_err_t (*read_data)(uint8_t *data, uint8_t size);
+
+    esp_err_t (*write_data)(const uint8_t *data, uint8_t size);
     SemaphoreHandle_t mutex;
 } pms_device_t;
 
@@ -136,7 +142,7 @@ static esp_err_t pms9003_crc_check(pms_frame_t *frame)
 }
 
 /**
- * @brief Performs UART read until frame is obtained
+ * @brief Performs read until frame is obtained
  *
  * Blocking function that waits PMS_TIMEOUT_MS milliseconds until timing out.
  * Frame can be their ACK for sent command or a measurement.
@@ -154,6 +160,8 @@ static esp_err_t pms9003_crc_check(pms_frame_t *frame)
  */
 static esp_err_t pms9003_read_frame(pms9003_handle_t handle, uint8_t size)
 {
+    esp_err_t status = ESP_FAIL;
+
     POINT_ASSERT(TAG, handle, ESP_ERR_INVALID_ARG);
     IOT_CHECK(TAG, size < PMS_MAX_PACKET_LENGTH, ESP_ERR_INVALID_ARG);
 
@@ -170,9 +178,15 @@ static esp_err_t pms9003_read_frame(pms9003_handle_t handle, uint8_t size)
 
     TickType_t entry_time = xTaskGetTickCount();
     do {
-        int status = uart_read_bytes(device->port, &byte, 1, pdMS_TO_TICKS(PMS_TIMEOUT_MS));
-        if (status < 1) {
-            return ESP_FAIL;
+        status = device->data_size(&byte);
+        if (status != ESP_OK || byte < 1) {
+            vTaskDelay(pdMS_TO_TICKS(200));
+            continue;
+        }
+
+        status = device->read_data(&byte, 1);
+        if (status != ESP_OK) {
+            return status;
         }
 
         switch (frame->length) {
@@ -306,17 +320,13 @@ static esp_err_t pms9003_read_measurement(pms9003_handle_t handle, pms9003_measu
  */
 static esp_err_t pms9003_do_cmd(pms9003_handle_t handle, bool wait_ack, const uint8_t *cmd, size_t size)
 {
+    esp_err_t status = ESP_FAIL;
+
     POINT_ASSERT(TAG, handle, ESP_ERR_INVALID_ARG);
+
     pms_device_t *device = (pms_device_t *) handle;
 
-#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 3, 0)
-    int ret = uart_write_bytes(device->port, (const char *) cmd, size);
-#else
-    int ret = uart_write_bytes(device->port, cmd, size);
-#endif
-    esp_err_t status = ret > 0 ? ESP_OK : ESP_FAIL;
-
-    status |= uart_wait_tx_done(device->port, pdMS_TO_TICKS(1000));
+    status = device->write_data(cmd, size);
 
     if (status == ESP_OK && wait_ack) {
         return pms9033_wait_ack(handle, cmd[2]);
@@ -328,24 +338,27 @@ static esp_err_t pms9003_do_cmd(pms9003_handle_t handle, bool wait_ack, const ui
 /**
  * @brief Initializes PMS driver
  *
- * @param port uart port
- * @param rx_pin rx gpio pin
- * @param tx_pin tx gpio pin
- * @param set_pin set gpio pin (GPIO_NUM_NC if not used)
- * @param reset_pin reset gpio pin (GPIO_NUM_NC if not used)
+ * @param reset_pin callback for reset pin
+ * @param set_pin callback for set pin
+ * @param data_size callback for rx data size
+ * @param read_data callback for reading rx data
  *
  * @return
  *      - pms9003_handle_t  success
  *      - NULL              error occurred
  */
 pms9003_handle_t
-pms9003_init(uart_port_t port, gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t set_pin, gpio_num_t reset_pin)
+pms9003_init(esp_err_t (*reset_pin)(uint8_t state), esp_err_t (*set_pin)(uint8_t state),
+             esp_err_t (*data_size)(uint8_t *size), esp_err_t (*read_data)(uint8_t *data, uint8_t size),
+             esp_err_t (*write_data)(const uint8_t *data, uint8_t size))
 {
-    IOT_CHECK(TAG, port < UART_NUM_MAX, NULL);
-    IOT_CHECK(TAG, rx_pin < GPIO_NUM_MAX, NULL);
-    IOT_CHECK(TAG, tx_pin < GPIO_NUM_MAX, NULL);
-    IOT_CHECK(TAG, set_pin < GPIO_NUM_MAX, NULL);
-    IOT_CHECK(TAG, reset_pin < GPIO_NUM_MAX, NULL);
+    IOT_CHECK(TAG, reset_pin != NULL, NULL);
+    IOT_CHECK(TAG, set_pin != NULL, NULL);
+    IOT_CHECK(TAG, data_size != NULL, NULL);
+    IOT_CHECK(TAG, read_data != NULL, NULL);
+    IOT_CHECK(TAG, write_data != NULL, NULL);
+
+    esp_err_t status = ESP_OK;
 
     pms_device_t *device = (pms_device_t *) calloc(1, sizeof(pms_device_t));
     POINT_ASSERT(TAG, device, NULL);
@@ -358,41 +371,12 @@ pms9003_init(uart_port_t port, gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t 
 
     device->reset_pin = reset_pin;
     device->set_pin = set_pin;
-    device->port = port;
+    device->write_data = write_data;
+    device->read_data = read_data;
+    device->data_size = data_size;
 
-    uart_config_t uart_config = {
-            .baud_rate = 9600,
-            .data_bits = UART_DATA_8_BITS,
-            .parity = UART_PARITY_DISABLE,
-            .stop_bits = UART_STOP_BITS_1,
-            .flow_ctrl = UART_HW_FLOWCTRL_DISABLE
-    };
+    status |= pms9003_reset(device);
 
-    int intr_alloc_flags = 0;
-
-#if CONFIG_UART_ISR_IN_IRAM
-    intr_alloc_flags = ESP_INTR_FLAG_IRAM;
-#endif
-
-    esp_err_t status = ESP_OK;
-    status |= uart_param_config(device->port, &uart_config);
-    status |= uart_set_pin(device->port, tx_pin, rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-    status |= uart_driver_install(device->port, PMS_MAX_PACKET_LENGTH * 8, 0, 0, NULL, intr_alloc_flags);
-
-    if (status != ESP_OK) goto err;
-
-    if (device->set_pin > GPIO_NUM_NC) {
-        gpio_set_direction(device->set_pin, GPIO_MODE_OUTPUT);
-        gpio_set_intr_type(device->set_pin, GPIO_INTR_DISABLE);
-    }
-
-    if (device->reset_pin > GPIO_NUM_NC) {
-        gpio_set_direction(device->reset_pin, GPIO_MODE_OUTPUT);
-        gpio_set_intr_type(device->reset_pin, GPIO_INTR_DISABLE);
-        gpio_set_level(device->reset_pin, 1);
-    }
-
-    pms9003_reset(device);
     vTaskDelay(pdMS_TO_TICKS(1000));
     // Wake up sensor if it was previously in sleep mode for any reason
     status |= pms9003_sleep(device, false);
@@ -461,14 +445,13 @@ esp_err_t pms9003_set_mode(pms9003_handle_t handle, pms_mode_t mode)
  */
 esp_err_t pms9003_sleep(pms9003_handle_t handle, bool sleep)
 {
+    esp_err_t status = ESP_OK;
+
     POINT_ASSERT(TAG, handle, ESP_ERR_INVALID_ARG);
+
     pms_device_t *device = (pms_device_t *) handle;
 
-    if (device->set_pin > GPIO_NUM_NC) {
-        return gpio_set_level(device->set_pin, !sleep);
-    }
-
-    esp_err_t status = ESP_OK;
+    device->set_pin(!sleep);
 
     SEMAPHORE_TAKE(device);
 
@@ -497,16 +480,15 @@ esp_err_t pms9003_sleep(pms9003_handle_t handle, bool sleep)
  */
 esp_err_t pms9003_reset(pms9003_handle_t handle)
 {
+    esp_err_t status = ESP_ERR_NOT_SUPPORTED;
+
     POINT_ASSERT(TAG, handle, ESP_ERR_INVALID_ARG);
+
     pms_device_t *device = (pms_device_t *) handle;
 
-    esp_err_t status = ESP_ERR_NOT_SUPPORTED;
-    if (device->reset_pin > GPIO_NUM_NC) {
-        status = gpio_set_level(device->reset_pin, 0);
-        vTaskDelay(pdMS_TO_TICKS(100));
-        status |= gpio_set_level(device->reset_pin, 1);
-    }
-
+    status = device->reset_pin(0);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    status = device->reset_pin(1);
 
     return status;
 }
@@ -525,7 +507,6 @@ esp_err_t pms9003_free(pms9003_handle_t handle)
     POINT_ASSERT(TAG, handle, ESP_ERR_INVALID_ARG);
     pms_device_t *device = (pms_device_t *) handle;
 
-    uart_driver_delete(device->port);
     vSemaphoreDelete(device->mutex);
     free(device);
 

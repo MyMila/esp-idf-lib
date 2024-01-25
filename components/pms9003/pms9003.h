@@ -41,7 +41,9 @@ typedef struct {
 typedef void *pms9003_handle_t;
 
 pms9003_handle_t
-pms9003_init(uart_port_t port, gpio_num_t rx_pin, gpio_num_t tx_pin, gpio_num_t set_pin, gpio_num_t reset_pin);
+pms9003_init(esp_err_t (*reset_pin)(uint8_t state), esp_err_t (*set_pin)(uint8_t state),
+             esp_err_t (*data_size)(uint8_t *size), esp_err_t (*read_data)(uint8_t *data, uint8_t size),
+             esp_err_t (*write_data)(const uint8_t *data, uint8_t size));
 
 esp_err_t pms9003_free(pms9003_handle_t handle);
 

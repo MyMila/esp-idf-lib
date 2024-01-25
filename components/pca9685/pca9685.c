@@ -319,7 +319,7 @@ esp_err_t pca9685_set_pwm_frequency(i2c_dev_t *dev, uint16_t freq)
 {
     uint32_t prescaler = round_div(INTERNAL_FREQ, (uint32_t)PCA9685_MAX_PWM_VALUE * freq) - 1;
     CHECK_ARG_LOGE(prescaler >= MIN_PRESCALER && prescaler <= MAX_PRESCALER,
-            "Invalid prescaler value (%d), must be in (%d..%d)", prescaler,
+            "Invalid prescaler value (%lu), must be in (%d..%d)", prescaler,
             MIN_PRESCALER, MAX_PRESCALER);
     return pca9685_set_prescaler(dev, prescaler);
 }

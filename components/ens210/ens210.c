@@ -33,6 +33,10 @@
 #define ENS210_REG_H_VAL         0x33
 
 #define CHECK_ARG(ARG) do { if (!(ARG)) return ESP_ERR_INVALID_ARG; } while (0)
+#define CHECK_INIT() do { if ((ens210_write_reg == NULL)||(ens210_read_reg == NULL)) return ESP_ERR_INVALID_STATE; } while (0)
+
+static ens210_write_reg_t ens210_write_reg = NULL;
+static ens210_read_reg_t ens210_read_reg = NULL;
 
 struct {
     uint8_t soldering_correction;
@@ -46,115 +50,115 @@ struct {
 
 static const char* TAG = "ENS210";
 
-esp_err_t static ens210_low_power(i2c_dev_t *dev, bool enable)
+esp_err_t static ens210_low_power(bool enable)
 {
+    esp_err_t status = ESP_FAIL;
     uint8_t data = enable ? 0x01 : 0x00;
 
-    I2C_DEV_TAKE_MUTEX(dev);
-    I2C_DEV_CHECK(dev, i2c_dev_write_reg(dev, ENS210_REG_SYS_CTRL, &data, 1));
-    I2C_DEV_GIVE_MUTEX(dev);
+    status = ens210_write_reg(ENS210_REG_SYS_CTRL, &data, 1);
+    if(status != ESP_OK) {
+        return status;
+    }
 
     vTaskDelay(pdMS_TO_TICKS(ENS210_BOOTING_MS));
 
     return ESP_OK;
 }
 
-esp_err_t ens210_init_desc(i2c_dev_t *dev, i2c_port_t port, gpio_num_t sda_gpio, gpio_num_t scl_gpio)
+esp_err_t ens210_init_desc(ens210_write_reg_t ens210_wr_t, ens210_read_reg_t ens210_rr_t)
 {
     esp_err_t res = ESP_OK;
-    CHECK_ARG(dev);
-
-    dev->port = port;
-    dev->addr = ENS210_ADDR;
-    dev->cfg.sda_io_num = sda_gpio;
-    dev->cfg.scl_io_num = scl_gpio;
-#if HELPER_TARGET_IS_ESP32
-    dev->cfg.master.clk_speed = I2C_FREQ_HZ;
-#endif
-    if (i2c_dev_create_mutex(dev) != ESP_OK) {
-        return ESP_FAIL;
-    }
+    CHECK_ARG(ens210_wr_t);
+    CHECK_ARG(ens210_rr_t);
 
     uint16_t part_id;
     uint64_t uid;
 
     esp_err_t err = ESP_OK;
 
+    ens210_write_reg = ens210_wr_t;
+    ens210_read_reg = ens210_rr_t;
+
     // Restart is needed as ENS210 seems to use previous baseline when starting, causing wrong values
-    err = ens210_reset(dev);
+    err = ens210_reset();
     if (err != ESP_OK) {
-        res = ESP_FAIL;
-        goto err;
+        return ESP_FAIL;
     }
 
     // Wait 10ms for the ENS210 to boot
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    err = ens210_version(dev, &part_id, &uid);
+    err = ens210_version(&part_id, &uid);
     if (err != ESP_OK) {
-        res = ESP_FAIL;
-        goto err;
+        return ESP_FAIL;
     }
 
     // Disable low power, to run more stable
-    err = ens210_low_power(dev, false);
+    err = ens210_low_power(false);
     if (err != ESP_OK) {
-        res = ESP_FAIL;
-        goto err;
+        return ESP_FAIL;
     }
 
     ens210.available = part_id == ENS210_PARTID;
-err:
-    if (res == ESP_FAIL) {
-        i2c_dev_delete_mutex(dev);
-    }
+
     return ESP_OK;
 }
 
-esp_err_t ens210_reset(i2c_dev_t *dev)
+esp_err_t ens210_reset(void)
 {
+    esp_err_t status = ESP_FAIL;
     uint8_t data = 0x80;
 
-    I2C_DEV_TAKE_MUTEX(dev);
-    I2C_DEV_CHECK(dev, i2c_dev_write_reg(dev, ENS210_REG_SYS_CTRL, &data, 1));
-    I2C_DEV_GIVE_MUTEX(dev);
+    status = ens210_write_reg(ENS210_REG_SYS_CTRL, &data, 1);
+    if(status != ESP_OK) {
+        return status;
+    }
 
     vTaskDelay(pdMS_TO_TICKS(ENS210_BOOTING_MS));
 
     return ESP_OK;
 }
 
-esp_err_t ens210_version(i2c_dev_t *dev, uint16_t *part_id, uint64_t *uid)
+esp_err_t ens210_version(uint16_t *part_id, uint64_t *uid)
 {
-    if (ens210_low_power(dev, false) != ESP_OK) goto error;
+    esp_err_t status = ESP_FAIL;
+    CHECK_INIT();
 
-    I2C_DEV_TAKE_MUTEX(dev);
+    if (ens210_low_power(false) != ESP_OK) goto error;
 
     uint8_t data[8];
-    I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS210_REG_PART_ID, data, 2));
+    status = ens210_read_reg(ENS210_REG_PART_ID, data, 2);
+    if(status != ESP_OK) {
+        return status;
+    }
 
     *part_id = data[1] * 256U + data[0] * 1U;
 
-    I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS210_REG_UID, data, 8));
+    status = ens210_read_reg(ENS210_REG_UID, data, 8);
+    if(status != ESP_OK) {
+        return status;
+    }
 
     for (uint8_t i = 0; i < 8; i++) {
         ((uint8_t *) uid)[i] = data[i];
     }
 
-    I2C_DEV_GIVE_MUTEX(dev);
-
     error:
-    if (ens210_low_power(dev, true) != ESP_OK) return ESP_FAIL;
+    if (ens210_low_power(true) != ESP_OK) return ESP_FAIL;
     return ESP_OK;
 }
 
-esp_err_t ens210_single_measurement_mode(i2c_dev_t *dev, bool enable)
+esp_err_t ens210_single_measurement_mode(bool enable)
 {
+    esp_err_t status = ESP_FAIL;
     uint8_t data = enable ? 0x00 : 0x03;
 
-    I2C_DEV_TAKE_MUTEX(dev);
-    I2C_DEV_CHECK(dev, i2c_dev_write_reg(dev, ENS210_REG_SENS_RUN, &data, 1));
-    I2C_DEV_GIVE_MUTEX(dev);
+    CHECK_INIT();
+
+    status = ens210_write_reg(ENS210_REG_SENS_RUN, &data, 1);
+    if(status != ESP_OK) {
+        return status;
+    }
 
     ens210.single_mode = enable;
 
@@ -172,13 +176,17 @@ static esp_err_t extract_reading(uint32_t in, uint32_t *out)
     return crc_ok && valid ? ESP_OK : ESP_FAIL;
 }
 
-static esp_err_t read(i2c_dev_t *dev, uint32_t *t_data, uint32_t *h_data)
+static esp_err_t read(uint32_t *t_data, uint32_t *h_data)
 {
+    esp_err_t status = ESP_FAIL;
     uint8_t data[6];
 
-    I2C_DEV_TAKE_MUTEX(dev);
-    I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS210_REG_T_VAL, data, 6));
-    I2C_DEV_GIVE_MUTEX(dev);
+    CHECK_INIT();
+
+    status = ens210_read_reg(ENS210_REG_T_VAL, data, 6);
+    if(status != ESP_OK) {
+        return status;
+    }
 
     // Retrieve and pack bytes into t_val and h_val
     uint32_t t_val = (uint32_t) ((uint32_t) data[2] << 16 | (uint32_t) data[1] << 8 | (uint32_t) data[0]);
@@ -213,29 +221,33 @@ static float ens210_to_humidity(uint32_t h_data)
     return h / 512;
 }
 
-esp_err_t ens210_measure(i2c_dev_t *dev, float *temperature, float *humidity)
+esp_err_t ens210_measure(float *temperature, float *humidity)
 {
+    esp_err_t status = ESP_FAIL;
     uint32_t t_val;
     uint32_t h_val;
+    uint8_t data = 0x03;
+
+    CHECK_INIT();
 
     if (ens210.single_mode) {
         // Start a single shot measurement
-        if (ens210_single_measurement_mode(dev, true) != ESP_OK) {
+        if (ens210_single_measurement_mode(true) != ESP_OK) {
             return ESP_FAIL;
         }
     }
 
-    uint8_t data = 0x03;
-    I2C_DEV_TAKE_MUTEX(dev);
-    I2C_DEV_CHECK(dev, i2c_dev_write_reg(dev, ENS210_REG_SENS_START, &data, 1));
-    I2C_DEV_GIVE_MUTEX(dev);
+    status = ens210_write_reg(ENS210_REG_SENS_START, &data, 1);
+    if(status != ESP_OK) {
+        return status;
+    }
 
     // Wait for measurement to complete
     if (ens210.single_mode) vTaskDelay(pdMS_TO_TICKS(ENS210_THCONV_SINGLE_MS));
     else vTaskDelay(pdMS_TO_TICKS(ENS210_THCONV_CONT_MS));
 
     // Get the measurement data
-    if (read(dev, &t_val, &h_val) != ESP_OK) {
+    if (read(&t_val, &h_val) != ESP_OK) {
         return ESP_FAIL;
     }
 
@@ -257,7 +269,7 @@ float ens210_absolute_humidity(float temperature, float humidity)
            ((273.15 + temperature) * UNIVERSAL_GAS_CONSTANT);
 }
 
-void ens210_set_correction(i2c_dev_t *dev, uint8_t correction)
+void ens210_set_correction(uint8_t correction)
 {
     ens210.soldering_correction = correction;
 }
@@ -267,12 +279,10 @@ bool ens210_available()
     return ens210.available;
 }
 
-esp_err_t ens210_free_desc(i2c_dev_t *dev)
+esp_err_t ens210_free_desc(void)
 {
-    CHECK_ARG(dev);
-
     ens210.available = false;
     ens210.single_mode = false;
     ens210.soldering_correction = 0;
-    return i2c_dev_delete_mutex(dev);
+    return ESP_OK;
 }
