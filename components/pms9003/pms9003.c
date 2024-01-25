@@ -352,8 +352,6 @@ pms9003_init(esp_err_t (*reset_pin)(uint8_t state), esp_err_t (*set_pin)(uint8_t
              esp_err_t (*data_size)(uint8_t *size), esp_err_t (*read_data)(uint8_t *data, uint8_t size),
              esp_err_t (*write_data)(const uint8_t *data, uint8_t size))
 {
-    IOT_CHECK(TAG, reset_pin != NULL, NULL);
-    IOT_CHECK(TAG, set_pin != NULL, NULL);
     IOT_CHECK(TAG, data_size != NULL, NULL);
     IOT_CHECK(TAG, read_data != NULL, NULL);
     IOT_CHECK(TAG, write_data != NULL, NULL);
@@ -375,18 +373,28 @@ pms9003_init(esp_err_t (*reset_pin)(uint8_t state), esp_err_t (*set_pin)(uint8_t
     device->read_data = read_data;
     device->data_size = data_size;
 
-    status |= pms9003_reset(device);
+    status = pms9003_reset(device);
+    if (status != ESP_OK) {
+        ESP_LOGE(TAG, "pms9003_reset: error: %s", esp_err_to_name(status));
+        goto err;
+    }
 
     vTaskDelay(pdMS_TO_TICKS(1000));
     // Wake up sensor if it was previously in sleep mode for any reason
-    status |= pms9003_sleep(device, false);
+    status = pms9003_sleep(device, false);
+    if (status != ESP_OK) {
+        ESP_LOGE(TAG, "pms9003_sleep: error: %s", esp_err_to_name(status));
+        goto err;
+    }
     // Some time for sensor to react and start responding
     // If delay is too small PMS won't send ACK for mode command
     vTaskDelay(pdMS_TO_TICKS(3000));
     // Force active mode as a start-up mode
-    status |= pms9003_set_mode(device, PMS_MODE_ACTIVE);
-
-    if (status != ESP_OK) goto err;
+    status = pms9003_set_mode(device, PMS_MODE_ACTIVE);
+    if (status != ESP_OK) {
+        ESP_LOGE(TAG, "pms9003_set_mode: error: %s", esp_err_to_name(status));
+        goto err;
+    }
 
     return (pms9003_handle_t) device;
 
@@ -451,7 +459,9 @@ esp_err_t pms9003_sleep(pms9003_handle_t handle, bool sleep)
 
     pms_device_t *device = (pms_device_t *) handle;
 
-    device->set_pin(!sleep);
+    if (device->set_pin != NULL) {
+        return device->set_pin(!sleep);
+    }
 
     SEMAPHORE_TAKE(device);
 
@@ -486,9 +496,11 @@ esp_err_t pms9003_reset(pms9003_handle_t handle)
 
     pms_device_t *device = (pms_device_t *) handle;
 
-    status = device->reset_pin(0);
-    vTaskDelay(pdMS_TO_TICKS(100));
-    status = device->reset_pin(1);
+    if (device->reset_pin != NULL) {
+        status = device->reset_pin(0);
+        vTaskDelay(pdMS_TO_TICKS(100));
+        status |= device->reset_pin(1);
+    }
 
     return status;
 }
