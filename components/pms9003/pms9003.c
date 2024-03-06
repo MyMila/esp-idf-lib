@@ -52,6 +52,8 @@ typedef struct {
     esp_err_t (*read_data)(uint8_t *data, uint8_t size);
 
     esp_err_t (*write_data)(const uint8_t *data, uint8_t size);
+
+    esp_err_t (*flush_buffer)(void);
     SemaphoreHandle_t mutex;
 } pms_device_t;
 
@@ -326,6 +328,11 @@ static esp_err_t pms9003_do_cmd(pms9003_handle_t handle, bool wait_ack, const ui
 
     pms_device_t *device = (pms_device_t *) handle;
 
+    status = device->flush_buffer();
+    if (status != ESP_OK) {
+        return status;
+    }
+
     status = device->write_data(cmd, size);
 
     if (status == ESP_OK && wait_ack) {
@@ -350,7 +357,8 @@ static esp_err_t pms9003_do_cmd(pms9003_handle_t handle, bool wait_ack, const ui
 pms9003_handle_t
 pms9003_init(esp_err_t (*reset_pin)(uint8_t state), esp_err_t (*set_pin)(uint8_t state),
              esp_err_t (*data_size)(uint8_t *size), esp_err_t (*read_data)(uint8_t *data, uint8_t size),
-             esp_err_t (*write_data)(const uint8_t *data, uint8_t size))
+             esp_err_t (*write_data)(const uint8_t *data, uint8_t size),
+             esp_err_t (*flush_buffer)(void))
 {
     IOT_CHECK(TAG, data_size != NULL, NULL);
     IOT_CHECK(TAG, read_data != NULL, NULL);
@@ -372,10 +380,17 @@ pms9003_init(esp_err_t (*reset_pin)(uint8_t state), esp_err_t (*set_pin)(uint8_t
     device->write_data = write_data;
     device->read_data = read_data;
     device->data_size = data_size;
+    device->flush_buffer = flush_buffer;
 
     status = pms9003_reset(device);
     if (status != ESP_OK) {
         ESP_LOGE(TAG, "pms9003_reset: error: %s", esp_err_to_name(status));
+        goto err;
+    }
+
+    status = device->flush_buffer();
+    if (status != ESP_OK) {
+        ESP_LOGE(TAG, "flush_buffer: error: %s", esp_err_to_name(status));
         goto err;
     }
 
@@ -386,6 +401,7 @@ pms9003_init(esp_err_t (*reset_pin)(uint8_t state), esp_err_t (*set_pin)(uint8_t
         ESP_LOGE(TAG, "pms9003_sleep: error: %s", esp_err_to_name(status));
         goto err;
     }
+
     // Some time for sensor to react and start responding
     // If delay is too small PMS won't send ACK for mode command
     vTaskDelay(pdMS_TO_TICKS(3000));
@@ -498,7 +514,7 @@ esp_err_t pms9003_reset(pms9003_handle_t handle)
 
     if (device->reset_pin != NULL) {
         status = device->reset_pin(0);
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(500));
         status |= device->reset_pin(1);
     }
 
