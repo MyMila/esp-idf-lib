@@ -76,8 +76,8 @@ esp_err_t ens160_init_desc(i2c_dev_t *dev, uint8_t addr, i2c_port_t port, gpio_n
     uint8_t fw_version[3] = { 0 };
     uint8_t hw_version[2] = { 0 };
     if (ens160_versions(dev, &fw_version, &hw_version) == ESP_OK) {
-        ESP_LOGD(TAG, "Firmware version: %x.%x.%x", fw_version[0], fw_version[1], fw_version[2]);
-        ESP_LOGD(TAG, "Hardware version: %x.%x", hw_version[0], hw_version[1]);
+        ESP_LOGI(TAG, "Firmware version: %x.%x.%x", fw_version[0], fw_version[1], fw_version[2]);
+        ESP_LOGI(TAG, "Hardware version: %x.%x", hw_version[0], hw_version[1]);
     }
 
     if (ens160_reset(dev) != ESP_OK) {
@@ -202,11 +202,15 @@ esp_err_t ens160_versions(i2c_dev_t *dev, uint8_t (*fw_version)[3], uint8_t (*hw
     I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS160_REG_GPR_READ_4, fw_version, 3));
 
     // Get hardware version
-    data = ENS160_COMMAND_GET_HWVER;
-    I2C_DEV_CHECK(dev, i2c_dev_write_reg(dev, ENS160_REG_COMMAND, &data, 1));
-    I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS160_REG_GPR_READ_0, hw_version, 2));
+//    data = ENS160_COMMAND_GET_HWVER;
+//    I2C_DEV_CHECK(dev, i2c_dev_write_reg(dev, ENS160_REG_COMMAND, &data, 1));
+//    I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS160_REG_GPR_READ_0, hw_version, 2));
 
     I2C_DEV_GIVE_MUTEX(dev);
+
+    if (ens160_set_mode(dev, ENS160_OPMODE_STD) != ESP_OK) {
+        return ESP_FAIL;
+    }
 
     return ESP_OK;
 }
@@ -350,7 +354,7 @@ esp_err_t ens160_set_environmental_data(i2c_dev_t *dev, float temperature, float
 // Perform measurement and stores result in internal variables
 esp_err_t
 ens160_measure(i2c_dev_t *dev, bool wait_for_new, ens160_aqi_t *aqi, uint16_t *tvoc, uint16_t *eco2,
-               uint32_t (*resistance)[4], uint32_t (*baseline)[4])
+               uint16_t (*resistance)[4], uint16_t (*baseline)[4])
 {
     CHECK_ARG(dev);
 
@@ -364,7 +368,7 @@ ens160_measure(i2c_dev_t *dev, bool wait_for_new, ens160_aqi_t *aqi, uint16_t *t
             I2C_DEV_TAKE_MUTEX(dev);
             I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS160_REG_DATA_STATUS, &status, 1));
             I2C_DEV_GIVE_MUTEX(dev);
-        } while (!IS_NEW_DATA_AVAILABLE(status));
+        } while (!IS_NEWGPR(status));
     } else {
         I2C_DEV_TAKE_MUTEX(dev);
         I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS160_REG_DATA_STATUS, &status, 1));
@@ -385,7 +389,7 @@ ens160_measure(i2c_dev_t *dev, bool wait_for_new, ens160_aqi_t *aqi, uint16_t *t
     if (IS_NEWGPR(status) && resistance != NULL) {
         I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS160_REG_GPR_READ_0, buffer, 8));
         for (uint8_t i = 0; i < 4; i++) {
-            (*resistance)[i] = CONVERT_RS_RAW2OHMS_F((uint32_t) (buffer[i * 2] | ((uint16_t) buffer[i * 2 + 1] << 8)));
+            (*resistance)[i] = (buffer[i * 2] | (buffer[i * 2 + 1] << 8));
         }
     }
 
@@ -393,7 +397,7 @@ ens160_measure(i2c_dev_t *dev, bool wait_for_new, ens160_aqi_t *aqi, uint16_t *t
     if ((IS_NEWGPR(status) || IS_NEWDAT(status)) && baseline != NULL) {
         I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS160_REG_DATA_BL, buffer, 8));
         for (uint8_t i = 0; i < 4; i++) {
-            (*baseline)[i] = CONVERT_RS_RAW2OHMS_F((uint32_t) (buffer[i * 2] | ((uint16_t) buffer[i * 2 + 1] << 8)));
+            (*baseline)[i] = (buffer[i * 2] | (buffer[i * 2 + 1] << 8));
         }
     }
 
