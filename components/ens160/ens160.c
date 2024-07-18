@@ -202,9 +202,9 @@ esp_err_t ens160_versions(i2c_dev_t *dev, uint8_t (*fw_version)[3], uint8_t (*hw
     I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS160_REG_GPR_READ_4, fw_version, 3));
 
     // Get hardware version
-//    data = ENS160_COMMAND_GET_HWVER;
-//    I2C_DEV_CHECK(dev, i2c_dev_write_reg(dev, ENS160_REG_COMMAND, &data, 1));
-//    I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS160_REG_GPR_READ_0, hw_version, 2));
+    data = ENS160_COMMAND_GET_HWVER;
+    I2C_DEV_CHECK(dev, i2c_dev_write_reg(dev, ENS160_REG_COMMAND, &data, 1));
+    I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, ENS160_REG_GPR_READ_0, hw_version, 2));
 
     I2C_DEV_GIVE_MUTEX(dev);
 
