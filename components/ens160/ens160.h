@@ -222,6 +222,12 @@ esp_err_t ens160_reset_baseline(i2c_dev_t *dev, ens160_bl_err_t* err);
  */
 esp_err_t ens160_set_mode(i2c_dev_t *dev, uint8_t mode);
 
+esp_err_t ens160_addCustomStep(i2c_dev_t *dev,uint16_t time, bool measureHP0, bool measureHP1, bool measureHP2, bool measureHP3, uint16_t tempHP0,
+                               uint16_t tempHP1, uint16_t tempHP2, uint16_t tempHP3);
+
+
+esp_err_t ens160_initCustomMode(i2c_dev_t *dev, uint16_t stepNum);
+
 #ifdef    __cplusplus
 }
 #endif

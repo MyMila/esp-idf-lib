@@ -14,6 +14,9 @@
 
 static const char *TAG = "ENS160";
 static const uint8_t ENS160_BL_MAGIC[4] = {0x53, 0xCE, 0x1A, 0xBF};
+static struct {
+    uint8_t _stepCount;
+} ens160_dev;
 
 // Initialize idle mode and confirms
 static esp_err_t ens160_clear_command(i2c_dev_t *dev)
@@ -410,4 +413,72 @@ esp_err_t ens160_free_desc(i2c_dev_t *dev)
     CHECK_ARG(dev);
 
     return i2c_dev_delete_mutex(dev);
+}
+
+esp_err_t ens160_read_reg(i2c_dev_t *dev,uint8_t reg, uint8_t *data)
+{
+    I2C_DEV_TAKE_MUTEX(dev);
+    I2C_DEV_CHECK(dev, i2c_dev_read_reg(dev, reg, &data, 1));
+    I2C_DEV_GIVE_MUTEX(dev);
+    return ESP_OK;
+}
+
+esp_err_t ens160_initCustomMode(i2c_dev_t *dev, uint16_t stepNum) {
+    uint8_t result;
+
+    if (stepNum > 0) {
+        ens160_dev._stepCount = stepNum;
+
+        result = ens160_set_mode(dev,ENS160_OPMODE_IDLE);
+        result = ens160_clear_command(dev);
+
+        result = ens160_write_reg(dev, ENS160_REG_COMMAND, ENS160_COMMAND_SETSEQ);
+    } else {
+        result = 1;
+    }
+    vTaskDelay(pdMS_TO_TICKS(ENS160_BOOTING_MS));
+    return 0;
+}
+
+esp_err_t ens160_addCustomStep(i2c_dev_t *dev,uint16_t time, bool measureHP0, bool measureHP1, bool measureHP2, bool measureHP3, uint16_t tempHP0,
+                               uint16_t tempHP1, uint16_t tempHP2, uint16_t tempHP3) {
+
+    uint8_t seq_ack;
+    uint8_t temp;
+
+    vTaskDelay(pdMS_TO_TICKS(ENS160_BOOTING_MS));                   // Wait to boot after reset
+
+    temp = (uint8_t)(((time / 24)-1) << 6);
+    if (measureHP0) temp = temp | 0x20;
+    if (measureHP1) temp = temp | 0x10;
+    if (measureHP2) temp = temp | 0x8;
+    if (measureHP3) temp = temp | 0x4;
+    ens160_write_reg(dev, ENS160_REG_GPR_WRITE_0, temp);
+
+    temp = (uint8_t)(((time / 24)-1) >> 2);
+    ens160_write_reg(dev, ENS160_REG_GPR_WRITE_1, temp);
+
+    ens160_write_reg(dev, ENS160_REG_GPR_WRITE_2, (uint8_t)(tempHP0/2));
+    ens160_write_reg(dev, ENS160_REG_GPR_WRITE_3, (uint8_t)(tempHP1/2));
+    ens160_write_reg(dev, ENS160_REG_GPR_WRITE_4, (uint8_t)(tempHP2/2));
+    ens160_write_reg(dev, ENS160_REG_GPR_WRITE_5, (uint8_t)(tempHP3/2));
+
+    ens160_write_reg(dev, ENS160_REG_GPR_WRITE_6, (uint8_t)(ens160_dev._stepCount - 1));
+
+    if (ens160_dev._stepCount == 1) {
+        ens160_write_reg(dev, ENS160_REG_GPR_WRITE_7, 128);
+    } else {
+        ens160_write_reg(dev, ENS160_REG_GPR_WRITE_7, 0);
+    }
+    vTaskDelay(pdMS_TO_TICKS(ENS160_BOOTING_MS));
+
+    ens160_read_reg(dev, ENS160_REG_GPR_READ_7, &seq_ack);
+    vTaskDelay(pdMS_TO_TICKS(ENS160_BOOTING_MS));                    // Wait to boot after reset
+
+    if ((ENS160_SEQ_ACK_COMPLETE | ens160_dev._stepCount) != seq_ack) {
+        ens160_dev._stepCount = ens160_dev._stepCount - 1;
+        return 0;
+    } else {
+        return 1;
+    }
 }
