@@ -318,9 +318,8 @@ static esp_err_t pms9003_do_cmd(pms9003_handle_t handle, bool wait_ack, const ui
 
     status |= uart_wait_tx_done(device->port, pdMS_TO_TICKS(1000));
 
-    if (status == ESP_OK && wait_ack) {
-        return pms9033_wait_ack(handle, cmd[2]);
-    }
+//
+
 
     return status;
 }
