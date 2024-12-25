@@ -101,7 +101,7 @@ esp_err_t ens210_init_desc(ens210_write_reg_t ens210_wr_t, ens210_read_reg_t ens
 
     ens210.available = part_id == ENS210_PARTID;
 
-    return ESP_OK;
+    return ens210.available ? ESP_OK : ESP_FAIL;
 }
 
 esp_err_t ens210_reset(void)
