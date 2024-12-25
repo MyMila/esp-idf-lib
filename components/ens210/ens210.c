@@ -79,15 +79,6 @@ esp_err_t ens210_init_desc(ens210_write_reg_t ens210_wr_t, ens210_read_reg_t ens
     ens210_write_reg = ens210_wr_t;
     ens210_read_reg = ens210_rr_t;
 
-    // Restart is needed as ENS210 seems to use previous baseline when starting, causing wrong values
-    err = ens210_reset();
-    if (err != ESP_OK) {
-        return ESP_FAIL;
-    }
-
-    // Wait 10ms for the ENS210 to boot
-    vTaskDelay(pdMS_TO_TICKS(100));
-
     // Disable low power, to run more stable
     err = ens210_low_power(false);
     if (err != ESP_OK) {
@@ -103,7 +94,7 @@ esp_err_t ens210_init_desc(ens210_write_reg_t ens210_wr_t, ens210_read_reg_t ens
 
     ens210.available = part_id == ENS210_PARTID;
 
-    return ESP_OK;
+    return ens210.available? ESP_OK : ESP_FAIL;
 }
 
 esp_err_t ens210_reset(void)
