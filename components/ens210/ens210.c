@@ -88,13 +88,15 @@ esp_err_t ens210_init_desc(ens210_write_reg_t ens210_wr_t, ens210_read_reg_t ens
     // Wait 10ms for the ENS210 to boot
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    err = ens210_version(&part_id, &uid);
+    // Disable low power, to run more stable
+    err = ens210_low_power(false);
     if (err != ESP_OK) {
         return ESP_FAIL;
     }
 
-    // Disable low power, to run more stable
-    err = ens210_low_power(false);
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    err = ens210_version(&part_id, &uid);
     if (err != ESP_OK) {
         return ESP_FAIL;
     }
