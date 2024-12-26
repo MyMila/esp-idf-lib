@@ -79,12 +79,6 @@ esp_err_t ens210_init_desc(ens210_write_reg_t ens210_wr_t, ens210_read_reg_t ens
     ens210_write_reg = ens210_wr_t;
     ens210_read_reg = ens210_rr_t;
 
-    // Restart is needed as ENS210 seems to use previous baseline when starting, causing wrong values
-    err = ens210_reset();
-    if (err != ESP_OK) {
-        return ESP_FAIL;
-    }
-
     // Wait 10ms for the ENS210 to boot
     vTaskDelay(pdMS_TO_TICKS(100));
 
